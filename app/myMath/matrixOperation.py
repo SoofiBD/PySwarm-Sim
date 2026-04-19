@@ -86,7 +86,7 @@ class MatrixOperation:
         return components
 
     @staticmethod
-    def findRiskyLinksI(conn_comp: List[List[int]], cthr: float, UAVs: List) -> List[List[int]]:
+    def findRiskyLinks(conn_comp: List[List[int]], cthr: float, UAVs: List) -> List[List[int]]:
         risky_links = []
         uav_pos = [u.getPos()._data for u in UAVs]
         
@@ -101,7 +101,7 @@ class MatrixOperation:
         return risky_links
 
     @staticmethod
-    def findRiskyLinks_groundI(conn_comp: List[List[int]], cthr: float, UAVs: List, ground) -> List[List[int]]:
+    def findRiskyLinks_ground(conn_comp: List[List[int]], cthr: float, UAVs: List, ground) -> List[List[int]]:
         risky_links = []
         n_uavs = len(UAVs)
         uav_pos = [u.getPos()._data for u in UAVs]
