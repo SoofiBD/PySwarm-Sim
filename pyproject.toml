@@ -1,0 +1,18 @@
+[project]
+name = "python-drone"
+version = "0.1.0"
+description = "Heterogeneous Flying Ad-hoc Networks (FANET) Test Environment"
+authors = [
+    {name = "Antigravity", email = "ai@google.com"}
+]
+dependencies = [
+    "PySide6>=6.0.0",
+    "numpy>=1.20.0",
+    "matplotlib>=3.3.0",
+    "pydantic>=2.0.0",
+    "requests",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

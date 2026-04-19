@@ -1,0 +1,397 @@
+[
+    {
+        "X": 710,
+        "Y": 333,
+        "Z": 0,
+        "goalNo": 7,
+        "state": "Free"
+    },
+    {
+        "X": 254,
+        "Y": 315,
+        "Z": 0,
+        "goalNo": 8,
+        "state": "Free"
+    },
+    {
+        "X": 275,
+        "Y": 79,
+        "Z": 0,
+        "goalNo": 9,
+        "state": "Free"
+    },
+    {
+        "X": 448,
+        "Y": 523,
+        "Z": 0,
+        "goalNo": 10,
+        "state": "Free"
+    },
+    {
+        "X": 30,
+        "Y": 555,
+        "Z": 0,
+        "goalNo": 11,
+        "state": "Free"
+    },
+    {
+        "X": 397.0,
+        "Y": 596.0,
+        "Z": 0.0,
+        "color": "green",
+        "goalNo": 1,
+        "state": "Free"
+    },
+    {
+        "X": 280.0,
+        "Y": 55.0,
+        "Z": 0.0,
+        "color": "green",
+        "goalNo": 2,
+        "state": "Free"
+    },
+    {
+        "X": 461.0,
+        "Y": 726.0,
+        "Z": 0.0,
+        "color": "green",
+        "goalNo": 3,
+        "state": "Free"
+    },
+    {
+        "X": 242,
+        "Y": 726,
+        "Z": 0,
+        "goalNo": 4,
+        "state": "Free"
+    },
+    {
+        "X": 501,
+        "Y": 225,
+        "Z": 0,
+        "goalNo": 5,
+        "state": "Free"
+    },
+    {
+        "X": 714,
+        "Y": 296,
+        "Z": 0,
+        "goalNo": 6,
+        "state": "Free"
+    },
+    {
+        "X": 423,
+        "Y": 502,
+        "Z": 0,
+        "goalNo": 12,
+        "state": "Free"
+    },
+    {
+        "X": 236,
+        "Y": 643,
+        "Z": 0,
+        "goalNo": 13,
+        "state": "Free"
+    },
+    {
+        "X": 573,
+        "Y": 328,
+        "Z": 0,
+        "goalNo": 14,
+        "state": "Free"
+    },
+    {
+        "X": 610,
+        "Y": 582,
+        "Z": 0,
+        "goalNo": 15,
+        "state": "Free"
+    },
+    {
+        "X": 782,
+        "Y": 163,
+        "Z": 0,
+        "goalNo": 16,
+        "state": "Free"
+    },
+    {
+        "X": 717,
+        "Y": 472,
+        "Z": 0,
+        "goalNo": 17,
+        "state": "Free"
+    },
+    {
+        "X": 310,
+        "Y": 767,
+        "Z": 0,
+        "goalNo": 18,
+        "state": "Free"
+    },
+    {
+        "X": 288,
+        "Y": 510,
+        "Z": 0,
+        "goalNo": 19,
+        "state": "Free"
+    },
+    {
+        "X": 267,
+        "Y": 707,
+        "Z": 0,
+        "goalNo": 20,
+        "state": "Free"
+    },
+    {
+        "X": 303,
+        "Y": 25,
+        "Z": 736,
+        "goalNo": 21,
+        "state": "Free"
+    },
+    {
+        "X": 730,
+        "Y": 366,
+        "Z": 310,
+        "goalNo": 22,
+        "state": "Free"
+    },
+    {
+        "X": 330,
+        "Y": 322,
+        "Z": 499,
+        "goalNo": 23,
+        "state": "Free"
+    },
+    {
+        "X": 86,
+        "Y": 451,
+        "Z": 16,
+        "goalNo": 24,
+        "state": "Free"
+    },
+    {
+        "X": 717,
+        "Y": 426,
+        "Z": 11,
+        "goalNo": 25,
+        "state": "Free"
+    },
+    {
+        "X": 489,
+        "Y": 596,
+        "Z": 0,
+        "goalNo": 26,
+        "state": "Free"
+    },
+    {
+        "X": 783,
+        "Y": 358,
+        "Z": 0,
+        "goalNo": 27,
+        "state": "Free"
+    },
+    {
+        "X": 647,
+        "Y": 367,
+        "Z": 0,
+        "goalNo": 28,
+        "state": "Free"
+    },
+    {
+        "X": 226,
+        "Y": 297,
+        "Z": 0,
+        "goalNo": 29,
+        "state": "Free"
+    },
+    {
+        "X": 415,
+        "Y": 520,
+        "Z": 0,
+        "goalNo": 30,
+        "state": "Free"
+    },
+    {
+        "X": 351,
+        "Y": 28,
+        "Z": 0,
+        "goalNo": 31,
+        "state": "Free"
+    },
+    {
+        "X": 255,
+        "Y": 641,
+        "Z": 0,
+        "goalNo": 32,
+        "state": "Free"
+    },
+    {
+        "X": 198,
+        "Y": 26,
+        "Z": 0,
+        "goalNo": 33,
+        "state": "Free"
+    },
+    {
+        "X": 257,
+        "Y": 794,
+        "Z": 0,
+        "goalNo": 34,
+        "state": "Free"
+    },
+    {
+        "X": 407,
+        "Y": 64,
+        "Z": 0,
+        "goalNo": 35,
+        "state": "Free"
+    },
+    {
+        "X": 505,
+        "Y": 601,
+        "Z": 0,
+        "goalNo": 36,
+        "state": "Free"
+    },
+    {
+        "X": 578,
+        "Y": 352,
+        "Z": 0,
+        "goalNo": 37,
+        "state": "Free"
+    },
+    {
+        "X": 554,
+        "Y": 288,
+        "Z": 0,
+        "goalNo": 38,
+        "state": "Free"
+    },
+    {
+        "X": 671,
+        "Y": 45,
+        "Z": 0,
+        "goalNo": 39,
+        "state": "Free"
+    },
+    {
+        "X": 321,
+        "Y": 610,
+        "Z": 0,
+        "goalNo": 40,
+        "state": "Free"
+    },
+    {
+        "X": 413,
+        "Y": 642,
+        "Z": 0,
+        "goalNo": 41,
+        "state": "Free"
+    },
+    {
+        "X": 402,
+        "Y": 350,
+        "Z": 0,
+        "goalNo": 42,
+        "state": "Free"
+    },
+    {
+        "X": 226,
+        "Y": 694,
+        "Z": 0,
+        "goalNo": 43,
+        "state": "Free"
+    },
+    {
+        "X": 458,
+        "Y": 760,
+        "Z": 0,
+        "goalNo": 44,
+        "state": "Free"
+    },
+    {
+        "X": 542,
+        "Y": 382,
+        "Z": 0,
+        "goalNo": 45,
+        "state": "Free"
+    },
+    {
+        "X": 359,
+        "Y": 138,
+        "Z": 0,
+        "goalNo": 46,
+        "state": "Free"
+    },
+    {
+        "X": 671,
+        "Y": 697,
+        "Z": 0,
+        "goalNo": 47,
+        "state": "Free"
+    },
+    {
+        "X": 384,
+        "Y": 493,
+        "Z": 0,
+        "goalNo": 48,
+        "state": "Free"
+    },
+    {
+        "X": 491,
+        "Y": 627,
+        "Z": 0,
+        "goalNo": 49,
+        "state": "Free"
+    },
+    {
+        "X": 255,
+        "Y": 234,
+        "Z": 0,
+        "goalNo": 50,
+        "state": "Free"
+    },
+    {
+        "X": 630,
+        "Y": 435,
+        "Z": 0,
+        "goalNo": 51,
+        "state": "Free"
+    },
+    {
+        "X": 435,
+        "Y": 365,
+        "Z": 0,
+        "goalNo": 52,
+        "state": "Free"
+    },
+    {
+        "X": 204,
+        "Y": 739,
+        "Z": 0,
+        "goalNo": 53,
+        "state": "Free"
+    },
+    {
+        "X": 568,
+        "Y": 396,
+        "Z": 0,
+        "goalNo": 54,
+        "state": "Free"
+    },
+    {
+        "X": 371,
+        "Y": 90,
+        "Z": 0,
+        "goalNo": 55,
+        "state": "Free"
+    },
+    {
+        "X": 96,
+        "Y": 751,
+        "Z": 0,
+        "goalNo": 56,
+        "state": "Free"
+    }
+]

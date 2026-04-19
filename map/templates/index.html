@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Drone Map</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet" />
+
+    <script src="{{ url_for('static', filename='json/drone.json') }}"></script>
+    <script src="{{ url_for('static', filename='json/target.json') }}"></script>
+    <script src="{{ url_for('static', filename='json/polylines.json') }}"></script>
+    <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/map.js') }}"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default"></script>
+
+</head>
+
+<body>
+    <div id="container">
+        <div id="map"></div>
+        <div id="display" style="display: none"></div>
+        <div id="dis" style="display: none"></div>
+    </div>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCvP1k9sSaMws0zeg7TQQLGgvmuChNyWBM&callback=initMap"></script>
+    <script>
+        $(document).ready(function() {
+            $.ajaxSetup({
+                cache: false
+            });
+        });
+    </script>
+</body>
+
+</html>
