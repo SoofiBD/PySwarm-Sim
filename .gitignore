@@ -1,5 +1,32 @@
-*.pyc
+# Byte-compiled / optimized / DLL files
 __pycache__/
-.DS_STORE
-venv
-.idea
+*.py[cod]
+*$py.class
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environments
+venv/
+env/
+.env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+.python-version
+
+docs/

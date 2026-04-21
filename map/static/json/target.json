@@ -35,33 +35,34 @@
         "state": "Free"
     },
     {
-        "X": 397.0,
-        "Y": 596.0,
+        "X": 65.0,
+        "Y": 377.0,
         "Z": 0.0,
         "color": "green",
         "goalNo": 1,
         "state": "Free"
     },
     {
-        "X": 280.0,
-        "Y": 55.0,
+        "X": 708.0,
+        "Y": 320.0,
         "Z": 0.0,
         "color": "green",
         "goalNo": 2,
         "state": "Free"
     },
     {
-        "X": 461.0,
-        "Y": 726.0,
+        "X": 671.0,
+        "Y": 144.0,
         "Z": 0.0,
         "color": "green",
         "goalNo": 3,
         "state": "Free"
     },
     {
-        "X": 242,
-        "Y": 726,
-        "Z": 0,
+        "X": 309.0,
+        "Y": 122.0,
+        "Z": 0.0,
+        "color": "green",
         "goalNo": 4,
         "state": "Free"
     },
