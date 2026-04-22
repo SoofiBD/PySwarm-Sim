@@ -10,6 +10,10 @@ A modern, high-performance simulation environment for **Heterogeneous Flying Ad-
 - **Vectorized Computations**: High-performance mathematical operations leveraging **NumPy**.
 - **State Management**: Robust data modeling using **Pydantic**.
 - **Connectivity Analysis**: Real-time adjacency matrix and connected components tracking.
+- **Collision Avoidance**: Drones detect and avoid collisions with nearby UAVs.
+- **Drone-to-Drone Communication**: UAVs share target info with neighbors within communication range.
+- **Relay Assignment**: Automatic relay drone assignment when network connectivity is threatened.
+- **Structured Logging**: Event-based logging for simulation debugging.
 
 ## 🛠 Technology Stack
 
@@ -17,6 +21,7 @@ A modern, high-performance simulation environment for **Heterogeneous Flying Ad-
 - **Computation**: NumPy
 - **Visualization**: Matplotlib (Qt6/Agg backend)
 - **Data Validation**: Pydantic v2
+- **Testing**: pytest
 - **Language**: Python 3.9+
 
 ## 📥 Installation
@@ -39,7 +44,11 @@ A modern, high-performance simulation environment for **Heterogeneous Flying Ad-
    ```bash
    pip install .
    ```
-   *Note: This will install PySide6, NumPy, Matplotlib, and Pydantic.*
+
+4. **Install dev dependencies** (optional, for testing):
+   ```bash
+   pip install pytest
+   ```
 
 ## 🚦 How to Run
 
@@ -56,15 +65,45 @@ python run.py
 - **Start/Stop**: Control the simulation state.
 - **Reset**: Clear the environment and reset drone states.
 
+## 🧪 Running Tests
+
+```bash
+pytest tests/ -v
+```
+
 ## 📂 Project Structure
 
 - `run.py`: Entry point of the application.
 - `View.py`: GUI definition and visualization logic.
 - `app/`: Core logic and data models.
-    - `engine.py`: Simulation thread and step logic.
-    - `uav.py`, `goal.py`, `ground.py`: Entity models.
-    - `manage_drones.py`: High-level coordination algorithms.
-    - `myMath/`: Optimized mathematical libraries.
+  - `engine.py`: Simulation thread and step logic.
+  - `uav.py`, `goal.py`, `ground.py`: Entity models.
+  - `manage_drones.py`: High-level coordination algorithms.
+  - `logger.py`: Structured logging.
+  - `myMath/`: Optimized mathematical libraries.
+- `tests/`: Unit tests.
+
+## 🔧 Configuration
+
+Key parameters in `app/manage_drones.py`:
+- `CollisionDetector.MIN_SAFE_DISTANCE = 5.0`: Minimum distance to avoid collisions
+- `DroneNetwork.COMM_RANGE = 150.0`: Drone-to-drone communication range
+
+Key parameters in `app/engine.py`:
+- `self.cthr = 200.0`: Connectivity threshold for network components
+- `self.interval = 0.05`: Simulation step interval (50ms)
+
+## 📝 Logging
+
+Simulation events are logged to:
+- Console (stdout)
+- `logs/simulation.log`
+
+Log event types:
+- `[CONNECTIVITY]`: Network component detection
+- `[RELAY]`: Relay assignment
+- `[NETWORK]`: Drone-to-drone links
+- `[COMM]`: Target sharing
 
 ---
 *Developed as part of modernizing FANET research tools.*

@@ -16,6 +16,8 @@ class UAV(Node):
     my_slave_list: List['UAV'] = Field(default_factory=list, alias="mySlaveList")
     target: Optional[Goal] = None
     uav_no: Optional[int] = Field(default=None, alias="UAVNo")
+    known_targets: List[Goal] = Field(default_factory=list, alias="knownTargets")
+    distance_to_target: float = Field(default=0.0, alias="distanceToTarget")
 
     # Compatibility getters/setters (subset)
     def getSpeed(self): return self.speed
@@ -29,6 +31,11 @@ class UAV(Node):
     def getMySlaveListComplete(self): return self.my_slave_list
     def getUAVNo(self): return self.uav_no
     def setUAVNo(self, v): self.uav_no = v
+    def getKnownTargets(self): return self.known_targets
+    def setKnownTargets(self, v): self.known_targets = v
+    def addKnownTarget(self, goal): self.known_targets.append(goal)
+    def getDistanceToTarget(self): return self.distance_to_target
+    def setDistanceToTarget(self, v): self.distance_to_target = v
 
     def clearMySlaveList(self):
         if self.my_slave_list:

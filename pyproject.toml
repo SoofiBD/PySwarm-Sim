@@ -11,6 +11,7 @@ dependencies = [
     "matplotlib>=3.3.0",
     "pydantic>=2.0.0",
     "requests",
+    "pytest>=7.0.0",
 ]
 
 [build-system]

@@ -1,8 +1,110 @@
-from typing import List, Optional
+from typing import List, Optional, Tuple, Dict
 from app.myMath.matrixOperation import MatrixOperation
 from app.uav import UAV
 from app.goal import Goal
 from app.ground import Ground
+
+
+class DroneNetwork:
+    """Manages drone-to-drone communication and target sharing."""
+
+    COMM_RANGE = 150.0
+
+    @staticmethod
+    def build_communication_graph(uavs: List[UAV]) -> Dict[int, List[int]]:
+        adj = MatrixOperation.UAVtoUAV_AdjMatrix(uavs)
+        graph: Dict[int, List[int]] = {i: [] for i in range(len(uavs))}
+
+        for i in range(len(uavs)):
+            for j in range(i + 1, len(uavs)):
+                if 0 < adj[i, j] <= DroneNetwork.COMM_RANGE:
+                    graph[i].append(j)
+                    graph[j].append(i)
+
+        return graph
+
+    @staticmethod
+    def share_targets(uavs: List[UAV]) -> None:
+        graph = DroneNetwork.build_communication_graph(uavs)
+
+        for uav in uavs:
+            uav.known_targets = []
+
+        for i, uav in enumerate(uavs):
+            target = uav.getTarget()
+            if target:
+                uav.distance_to_target = float(MatrixOperation.distance(uav.pos, target.pos))
+                for neighbor_idx in graph.get(i, []):
+                    neighbor = uavs[neighbor_idx]
+                    if neighbor.getState() == "Free":
+                        dist = float(MatrixOperation.distance(neighbor.pos, target.pos))
+                        if target not in neighbor.known_targets:
+                            neighbor.known_targets.append(target)
+                        neighbor.setDistanceToTarget(dist)
+
+    @staticmethod
+    def broadcast_position(uavs: List[UAV]) -> Dict[int, Tuple[float, float, float]]:
+        positions: Dict[int, Tuple[float, float, float]] = {}
+        graph = DroneNetwork.build_communication_graph(uavs)
+
+        for i, uav in enumerate(uavs):
+            positions[i] = (uav.pos.x, uav.pos.y, uav.pos.z)
+            for neighbor in graph.get(i, []):
+                pass
+
+        return positions
+
+
+class CollisionDetector:
+    """Handles drone collision detection and avoidance."""
+
+    MIN_SAFE_DISTANCE = 5.0
+
+    @staticmethod
+    def detect_potential_collisions(
+        uavs: List[UAV]
+    ) -> List[Tuple[UAV, UAV, float]]:
+        adj = MatrixOperation.UAVtoUAV_AdjMatrix(uavs)
+        collisions = []
+        n = len(uavs)
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                dist = adj[i, j]
+                if 0 < dist < CollisionDetector.MIN_SAFE_DISTANCE:
+                    collisions.append((uavs[i], uavs[j], dist))
+
+        return collisions
+
+    @staticmethod
+    def resolve_collision(uav: UAV, other_uav: UAV) -> None:
+        """Apply avoidance maneuver by adjusting direction."""
+        from app.myMath.vector import VectorOperations
+
+        escape_dir = VectorOperations.substract(uav.pos, other_uav.pos)
+        if escape_dir.magnitude() > 0:
+            escape_dir = escape_dir.normalize()
+            avoidance_offset = VectorOperations.multiply(escape_dir, CollisionDetector.MIN_SAFE_DISTANCE)
+            uav.pos = VectorOperations.sum(uav.pos, avoidance_offset)
+
+    @staticmethod
+    def apply_avoidance(uavs: List[UAV]) -> int:
+        """Apply collision avoidance to all UAVs. Returns number of collisions resolved."""
+        from app.myMath.vector import VectorOperations
+
+        collisions = CollisionDetector.detect_potential_collisions(uavs)
+        resolved = 0
+
+        for uav1, uav2, _ in collisions:
+            if uav1.getState() != "Free":
+                CollisionDetector.resolve_collision(uav2, uav1)
+                resolved += 1
+            elif uav2.getState() != "Free":
+                CollisionDetector.resolve_collision(uav1, uav2)
+                resolved += 1
+
+        return resolved
+
 
 class DroneManager:
     """Manages high-level UAV behaviors and assignments."""

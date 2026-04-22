@@ -44,7 +44,7 @@ class Vector:
     def getLength(self) -> float:
         return self.get_length()
 
-    def normalize(self):
+    def normalize(self) -> "Vector":
         norm = self.get_length()
         if norm == 0:
             return Vector(0, 0, 0)
