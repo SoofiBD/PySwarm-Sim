@@ -1,0 +1,47 @@
+# ── Stage 1: dependency builder ───────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# System build deps for scipy/numpy wheels
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc gfortran libopenblas-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml .
+# Install into an isolated prefix so Stage 2 can COPY just the packages
+RUN pip install --no-cache-dir --prefix=/install \
+        fastapi \
+        "uvicorn[standard]" \
+        websockets \
+        numpy \
+        scipy \
+        pydantic \
+        python-multipart
+
+
+# ── Stage 2: runtime image ────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy pre-built packages from Stage 1
+COPY --from=builder /install /usr/local
+
+# Copy source — static assets are served by nginx in production;
+# the map/templates dir is still needed for the root index route.
+COPY app/     ./app/
+COPY server/  ./server/
+COPY map/templates/ ./map/templates/
+
+# Non-root user for security
+RUN addgroup --system drone && adduser --system --ingroup drone drone
+USER drone
+
+EXPOSE 8000
+
+# Uvicorn with 2 workers (adjust to CPU count in production)
+CMD ["uvicorn", "server.main:app", \
+     "--host", "0.0.0.0", "--port", "8000", \
+     "--workers", "2", \
+     "--log-level", "info"]
