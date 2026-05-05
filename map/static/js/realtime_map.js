@@ -29,7 +29,7 @@
 "use strict";
 
 // ── Configuration ────────────────────────────────────────────────────────────
-const WS_URL   = `ws://${location.host}/ws/telemetry`;
+const WS_URL   = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/telemetry`;
 const TICK_MS  = 50;   // expected server interval — used for lerp smoothing
 const COMM_RANGE_M = 500;   // metres — link drawn if drones within this range
 const WARN_RATIO   = 0.80;  // link turns red above WARN_RATIO × COMM_RANGE

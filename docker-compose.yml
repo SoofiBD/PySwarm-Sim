@@ -37,14 +37,13 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      # Uncomment for TLS once you have a cert via Certbot:
-      # - "443:443"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       # Static JS/CSS/images served directly — zero Python overhead
       - ./map/static:/srv/static:ro
-      # Certbot managed certs (uncomment when using TLS):
-      # - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Certbot managed certs — run: certbot certonly --nginx -d YOUR_DOMAIN_HERE
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       backend:
         condition: service_healthy
