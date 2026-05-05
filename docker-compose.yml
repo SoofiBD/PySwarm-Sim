@@ -11,8 +11,7 @@ services:
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
-      # Tune these to match your VPS CPU/memory
-      UVICORN_WORKERS: "2"
+      MAPS_API_KEY: "${MAPS_API_KEY}"
     # Backend is NOT exposed directly on the host; nginx is the only ingress.
     expose:
       - "8000"
