@@ -98,21 +98,25 @@ class CollisionDetector:
                 result.append((uavs[i], uavs[j], dist))
         return result
 
+    REPULSION_SPEED: float = 2.0  # m/s impulse magnitude
+
     @staticmethod
     def resolve_collision(uav: UAV, other_uav: UAV) -> None:
         """
-        Push `uav` away from `other_uav` by MIN_SAFE_DISTANCE along
-        the line joining them.  If they are co-located, nudge along +X.
+        Add a repulsion velocity impulse to `uav` pointing away from `other_uav`.
+        Modifies velocity only — the physics integrator applies the displacement.
+        Co-located drones receive a nudge along +X.
         """
         delta = uav.pos._data - other_uav.pos._data
         norm = float(np.linalg.norm(delta))
         if norm < 1e-9:
-            delta = np.array([CollisionDetector.MIN_SAFE_DISTANCE, 0.0, 0.0])
+            direction = np.array([1.0, 0.0, 0.0])
         else:
-            delta = delta / norm * CollisionDetector.MIN_SAFE_DISTANCE
+            direction = delta / norm
 
         from app.myMath.vector import Vector
-        uav.pos = Vector(*(uav.pos._data + delta))
+        impulse = direction * CollisionDetector.REPULSION_SPEED
+        uav.velocity = Vector(*(uav.velocity._data + impulse))
 
     @staticmethod
     def apply_avoidance(uavs: List[UAV]) -> int:

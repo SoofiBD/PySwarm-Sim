@@ -101,41 +101,39 @@
 <!-- Real-time map logic (no jQuery, no static JSON polling) -->
 <script src="{{ url_for('static', path='js/realtime_map.js') }}"></script>
 
-<!-- Sidebar stats wired into the WebSocket message handler -->
+<!-- Sidebar stats driven by the _onTelemetry hook exported from realtime_map.js -->
 <script>
 (function () {
-    const origOnMessage = window._wsMessageHook;  // extension point if needed
     const statDrones  = document.getElementById("stat-drones");
     const statTargets = document.getElementById("stat-targets");
     const statSpeed   = document.getElementById("stat-speed");
     const wsStatus    = document.getElementById("ws-status");
 
-    // Patch the status indicator once WebSocket state is known
-    const _patchStatus = setInterval(() => {
-        if (typeof ws === "undefined") return;
-        clearInterval(_patchStatus);
-        const _origOpen  = ws.onopen;
-        const _origClose = ws.onclose;
-        ws.addEventListener("open",  () => { wsStatus.textContent = "Live"; wsStatus.className = "ok"; });
-        ws.addEventListener("close", () => { wsStatus.textContent = "Reconnecting…"; wsStatus.className = "err"; });
-        ws.addEventListener("message", (e) => {
-            const msg = JSON.parse(e.data);
-            if (msg.type !== "telemetry") return;
-            statDrones.textContent  = msg.drones.length;
-            const free = msg.targets.filter(t => t.state !== "Visited").length;
-            statTargets.textContent = free;
-            if (msg.drones.length > 0) {
-                const avg = msg.drones.reduce((s, d) => s + d.speed, 0) / msg.drones.length;
-                statSpeed.textContent = avg.toFixed(1);
-            }
-        });
-    }, 100);
+    window._onTelemetry = function (msg) {
+        statDrones.textContent = msg.drones.length;
+        const free = msg.targets.filter(t => t.state !== "Visited").length;
+        statTargets.textContent = free;
+        if (msg.drones.length > 0) {
+            const avg = msg.drones.reduce((s, d) => s + d.speed, 0) / msg.drones.length;
+            statSpeed.textContent = avg.toFixed(1);
+        }
+    };
+
+    // Status badge wired to ws open/close events exported from realtime_map.js
+    window.addEventListener("load", () => {
+        const checkWs = setInterval(() => {
+            if (typeof ws === "undefined") return;
+            clearInterval(checkWs);
+            ws.addEventListener("open",  () => { wsStatus.textContent = "Live"; wsStatus.className = "ok"; });
+            ws.addEventListener("close", () => { wsStatus.textContent = "Reconnecting…"; wsStatus.className = "err"; });
+        }, 50);
+    });
 })();
 </script>
 
 <!-- Google Maps — callback=initMap triggers realtime_map.js -->
 <script async defer
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCvP1k9sSaMws0zeg7TQQLGgvmuChNyWBM&callback=initMap">
+    src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&callback=initMap">
 </script>
 </body>
 </html>

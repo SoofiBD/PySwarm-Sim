@@ -40,8 +40,10 @@ USER drone
 
 EXPOSE 8000
 
-# Uvicorn with 2 workers (adjust to CPU count in production)
+# Single worker: SimulationRunner is a module-level singleton and is not
+# fork-safe — multiple workers would spawn independent simulations causing
+# clients to see divergent telemetry depending on which worker serves them.
 CMD ["uvicorn", "server.main:app", \
      "--host", "0.0.0.0", "--port", "8000", \
-     "--workers", "2", \
+     "--workers", "1", \
      "--log-level", "info"]
