@@ -172,8 +172,15 @@ def _build_telemetry(uavs: list[UAV], goals: list[Goal]) -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global runner
-    uavs, goals, ground = _create_simulation()
-    runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_make_broadcast_fn())
+    n_drones  = int(os.getenv("N_DRONES", "6"))
+    n_targets = int(os.getenv("N_TARGETS", "8"))
+    cthr      = float(os.getenv("CTHR", "200.0"))
+    dt        = float(os.getenv("SIM_DT", "0.05"))
+    uavs, goals, ground = _create_simulation(n_drones=n_drones,
+                                              n_targets=n_targets,
+                                              cthr=cthr)
+    runner = SimulationRunner(uavs, goals, ground,
+                              broadcast_fn=_make_broadcast_fn(), dt=dt, cthr=cthr)
     task = asyncio.create_task(runner.run_loop(), name="simulation")
     yield
     runner.stop()

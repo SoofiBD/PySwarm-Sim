@@ -39,6 +39,16 @@ class TestAStarPathfinder:
         assert any(abs(y - 120) > 20 or abs(z - 40) > 20 for y, z in zip(y_vals, z_vals)), \
             "Path should detour around obstacles (in y or z)"
 
+    def test_path_does_not_leave_bounds(self):
+        start = Vector(0, 0, 40)
+        goal  = Vector(360, 360, 160)
+        path  = self.pf.find_path(start, goal)
+        assert path is not None
+        for wp in path:
+            assert 0 <= wp.x <= 400
+            assert 0 <= wp.y <= 400
+            assert 0 <= wp.z <= 200
+
     def test_unreachable_goal_returns_none(self):
         cx, cy, cz = 200.0, 200.0, 40.0
         r = 40.0

@@ -11,7 +11,13 @@ services:
     restart: unless-stopped
     environment:
       PYTHONUNBUFFERED: "1"
-      MAPS_API_KEY: "${MAPS_API_KEY}"
+      MAPS_API_KEY:  "${MAPS_API_KEY}"
+      N_DRONES:      "${N_DRONES:-6}"
+      N_TARGETS:     "${N_TARGETS:-8}"
+      SIM_DT:        "${SIM_DT:-0.05}"
+      CTHR:          "${CTHR:-200.0}"
+    env_file:
+      - .env
     # Backend is NOT exposed directly on the host; nginx is the only ingress.
     expose:
       - "8000"
