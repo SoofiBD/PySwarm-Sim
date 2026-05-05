@@ -113,6 +113,7 @@ function _onMessage(event) {
     _processDrones(msg.drones, now);
     _processTargets(msg.targets);
     _rebuildCommLinks(msg.drones);
+    _dispatchTelemetryHook(msg);
 }
 
 // ── Drone marker management ───────────────────────────────────────────────────
@@ -258,4 +259,12 @@ function _droneInfoHtml(d) {
 function _updateStatus(msg) {
     const el = document.getElementById("ws-status");
     if (el) el.textContent = msg;
+}
+
+// External hook — set window._onTelemetry = (msg) => { ... } to receive
+// every parsed telemetry message from the WebSocket feed.
+function _dispatchTelemetryHook(msg) {
+    if (typeof window._onTelemetry === "function") {
+        window._onTelemetry(msg);
+    }
 }
