@@ -42,6 +42,11 @@ class SimulationRunner:
         self.cthr = cthr
         self.running = False
         self._step_count = 0
+        self.metrics: dict = {
+            "steps": 0,
+            "collisions_resolved": 0,
+            "targets_visited": 0,
+        }
         self._pathfinder = AStarPathfinder(
             grid_resolution=40.0,
             bounds=(0, 800, 0, 800, 0, 200),
@@ -69,6 +74,7 @@ class SimulationRunner:
             return
 
         self._step_count += 1
+        self.metrics["steps"] += 1
 
         # 1. Build adjacency / distance matrix
         if self.ground:
@@ -111,7 +117,8 @@ class SimulationRunner:
                     uav.followLeader(dt=self.dt)
 
         # 6. Collision avoidance (KD-tree accelerated — O(N log N))
-        CollisionDetector.apply_avoidance(self.uavs)
+        resolved = CollisionDetector.apply_avoidance(self.uavs)
+        self.metrics["collisions_resolved"] += resolved
 
         # 7. Physics-based movement toward assigned target
         for uav in self.uavs:
@@ -121,3 +128,7 @@ class SimulationRunner:
                 uav.move(target, dt=self.dt,
                          pathfinder=self._pathfinder,
                          all_uav_positions=positions)
+
+        self.metrics["targets_visited"] = sum(
+            1 for g in self.goals if g.state == "Visited"
+        )

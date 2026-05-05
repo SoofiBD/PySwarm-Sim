@@ -12,6 +12,7 @@ Entry point:
 import asyncio
 import json
 import math
+import os
 from contextlib import asynccontextmanager
 from typing import Set
 
@@ -20,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel as PydanticBase
 
 from app.myMath.vector import Vector
 from app.uav import UAV
@@ -44,6 +46,17 @@ def sim_to_geo(x: float, y: float) -> tuple[float, float]:
     lat = _REF_LAT + (y - _ORIGIN_Y) * _LAT_DEG_PER_M
     lng = _REF_LNG + (x - _ORIGIN_X) * _LNG_DEG_PER_M
     return lat, lng
+
+
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
+class ControlRequest(PydanticBase):
+    action: str  # "start" | "stop" | "reset"
+
+class ConfigRequest(PydanticBase):
+    n_drones: int = 6
+    n_targets: int = 8
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +125,14 @@ def _create_simulation(
     return uavs, goals, ground
 
 
+def _make_broadcast_fn():
+    async def _broadcast(uavs_: list, goals_: list) -> None:
+        if manager.client_count > 0:
+            payload = _build_telemetry(uavs_, goals_)
+            await manager.broadcast(payload)
+    return _broadcast
+
+
 # ---------------------------------------------------------------------------
 # Telemetry serialiser — converts simulation state → broadcast payload
 # ---------------------------------------------------------------------------
@@ -152,13 +173,7 @@ def _build_telemetry(uavs: list[UAV], goals: list[Goal]) -> dict:
 async def lifespan(app: FastAPI):
     global runner
     uavs, goals, ground = _create_simulation()
-
-    async def _broadcast(uavs_: list, goals_: list) -> None:
-        if manager.client_count > 0:
-            payload = _build_telemetry(uavs_, goals_)
-            await manager.broadcast(payload)
-
-    runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_broadcast)
+    runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_make_broadcast_fn())
     task = asyncio.create_task(runner.run_loop(), name="simulation")
     yield
     runner.stop()
@@ -183,13 +198,65 @@ templates = Jinja2Templates(directory="map/templates")
 # ---------------------------------------------------------------------------
 @app.get("/", include_in_schema=False)
 async def index(request: Request):
-    return templates.TemplateResponse(request, "index.html", {})
+    return templates.TemplateResponse(request, "index.html", {
+        "maps_api_key": os.getenv("MAPS_API_KEY", ""),
+    })
 
 
 @app.get("/api/status")
 async def status() -> JSONResponse:
     clients = manager.client_count
     return JSONResponse({"clients_connected": clients, "simulation_running": runner is not None and runner.running})
+
+
+@app.get("/api/metrics")
+async def metrics() -> JSONResponse:
+    if runner is None:
+        return JSONResponse({"error": "simulation not running"}, status_code=503)
+    return JSONResponse({
+        "steps": runner.metrics["steps"],
+        "collisions_resolved": runner.metrics["collisions_resolved"],
+        "targets_visited": runner.metrics["targets_visited"],
+        "drones": len(runner.uavs),
+        "targets": len(runner.goals),
+    })
+
+
+@app.post("/api/control")
+async def control(req: ControlRequest) -> JSONResponse:
+    global runner
+    if req.action == "stop":
+        if runner:
+            runner.stop()
+        return JSONResponse({"status": "stopped"})
+    elif req.action == "start":
+        if runner and not runner.running:
+            asyncio.create_task(runner.run_loop(), name="simulation")
+        return JSONResponse({"status": "started"})
+    elif req.action == "reset":
+        if runner:
+            runner.stop()
+        uavs, goals, ground = _create_simulation()
+        runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_make_broadcast_fn())
+        asyncio.create_task(runner.run_loop(), name="simulation")
+        return JSONResponse({"status": "reset"})
+    return JSONResponse({"error": f"unknown action: {req.action}"}, status_code=400)
+
+
+@app.post("/api/config")
+async def configure(req: ConfigRequest) -> JSONResponse:
+    global runner
+    if runner:
+        runner.stop()
+    uavs, goals, ground = _create_simulation(
+        n_drones=req.n_drones,
+        n_targets=req.n_targets,
+    )
+    runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_make_broadcast_fn())
+    asyncio.create_task(runner.run_loop(), name="simulation")
+    return JSONResponse({"status": "reconfigured",
+                         "n_drones": req.n_drones,
+                         "n_targets": req.n_targets})
 
 
 @app.websocket("/ws/telemetry")
