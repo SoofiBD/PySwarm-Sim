@@ -11,23 +11,24 @@ import random
 class GenerateUAV:
 
     @staticmethod
-    def Run(count:int=None, loctype:int=None, cthr:float=None, UAVs:list[UAV]=[], ground:Ground=None):
-        count:int = len(UAVs) + count
-        i:int = 0        
-        UAVno:int = 0
-        done:bool = True
+    def Run(count: int = None, loctype: int = None, cthr: float = None, UAVs: list[UAV] | None = None, ground: Ground = None):
+        if UAVs is None:
+            UAVs = []
+        count: int = len(UAVs) + count
+        i: int = 0        
+        UAVno: int = 0
+        done: bool = True
         if ground != None:
             done = False
             while (not done):
-                X:float = random.randrange(0, 800)
-                Y:float = random.randrange(0, 800)
-                Z:float = 0
+                X: float = random.randrange(0, 800)
+                Y: float = random.randrange(0, 800)
+                Z: float = 0
                 if MatrixOperation.distance_XYZ(X, Y, Z, ground.getPos().getX(), ground.getPos().getY(), ground.getPos().getZ()) < (cthr * 0.9):
                     done = True
                     UAVs.append(UAV(pos=Vector(X, Y, Z), cthr=cthr, ground=ground))
                     UAVs[len(UAVs) - 1].setUAVNo(len(UAVs))
                     UAVs[len(UAVs) - 1].setIPAddress("10.0.0." + str(len(UAVs)+1))
-                    UAVs[len(UAVs) - 1].toJson("map/static/json/drone.json")           
         
         for i in range(len(UAVs), count):
             if (loctype == 1):
@@ -46,7 +47,6 @@ class GenerateUAV:
                             UAVs.append(UAV(pos=Vector(X, Y, Z), cthr=cthr, ground=ground))
                             UAVs[len(UAVs) - 1].setUAVNo(len(UAVs))
                             UAVs[len(UAVs) - 1].setIPAddress("10.0.0." + str(len(UAVs)+1))
-                            UAVs[len(UAVs) - 1].toJson("map/static/json/drone.json")
                 else:
                     X = random.randrange(0, 800)
                     Y = random.randrange(0, 800)
@@ -54,7 +54,6 @@ class GenerateUAV:
                     UAVs.append(UAV(pos=Vector(X, Y, Z), cthr=cthr, ground=ground))
                     UAVs[len(UAVs) - 1].setUAVNo(len(UAVs))
                     UAVs[len(UAVs) - 1].setIPAddress("10.0.0." + str(len(UAVs)+1))
-                    UAVs[len(UAVs) - 1].toJson("map/static/json/drone.json")
             else:
                 done = False
                 while (not done):
@@ -66,5 +65,4 @@ class GenerateUAV:
                         UAVs.append(UAV(pos=Vector(X, Y, Z), cthr=cthr, ground=ground))
                         UAVs[len(UAVs) - 1].setUAVNo(len(UAVs))
                         UAVs[len(UAVs) - 1].setIPAddress("10.0.0." + str(len(UAVs)+1))
-                        UAVs[len(UAVs) - 1].toJson("map/static/json/drone.json")
         return UAVs

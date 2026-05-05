@@ -22,7 +22,8 @@ async def test_one_tick_does_not_raise():
         received.append((u, g))
 
     runner = SimulationRunner(uavs, goals, ground, broadcast_fn=fake_broadcast, dt=0.05)
-    runner._step()
+    # tick via the shared SimulationStep
+    runner._sim_step.tick(runner.uavs, runner.goals, runner.ground)
     await runner.broadcast_fn(runner.uavs, runner.goals)
     assert len(received) == 1
 
@@ -37,7 +38,7 @@ async def test_metrics_increment_per_step():
 
     runner = SimulationRunner(uavs, goals, ground, broadcast_fn=noop)
     assert runner.metrics["steps"] == 0
-    runner._step()
+    runner._sim_step.tick(runner.uavs, runner.goals, runner.ground)
     assert runner.metrics["steps"] == 1
-    runner._step()
+    runner._sim_step.tick(runner.uavs, runner.goals, runner.ground)
     assert runner.metrics["steps"] == 2

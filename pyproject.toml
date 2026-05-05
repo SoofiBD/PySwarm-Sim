@@ -3,7 +3,7 @@ name = "python-drone"
 version = "0.1.0"
 description = "Heterogeneous Flying Ad-hoc Networks (FANET) Test Environment"
 authors = [
-    {name = "Antigravity", email = "ai@google.com"}
+    {name = "SoofiBD", email = "burakduvakli@hotmail.com"}
 ]
 dependencies = [
     # Desktop UI (original path — kept for backward compat)

@@ -26,9 +26,28 @@ pip-delete-this-directory.txt
 *.swp
 *.swo
 
+# Build / packaging artifacts
+*.egg-info/
+python_drone.egg-info/
+dist/
+build/
+*.egg
+
+# Test / cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+logs/
+
+# AI tools
+.claude/
+.worktrees/
+
+# Documentation (generated)
+docs/
+
 # Project specific
 .python-version
-
-docs/
-docs/.worktrees/
-
+test_pyside.py

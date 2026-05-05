@@ -6,16 +6,17 @@ import random
 class GenerateGoal:
 
     @staticmethod
-    def Run(count:int=None, Goals:list[Goal]=[]):
+    def Run(count: int = None, Goals: list[Goal] | None = None):
+        if Goals is None:
+            Goals = []
         count = len(Goals) + count
-        i:int = 0
-        goalNo:int = 0
+        i: int = 0
+        goalNo: int = 0
         for i in range(len(Goals), count):
             X = random.randrange(0, 800)
             Y = random.randrange(0, 800)
             Z = 0 #random.randrange(0, 800)
             Goals.append(Goal(pos=Vector(X, Y, Z)))
             Goals[len(Goals) - 1].setGoalNo(len(Goals))
-            Goals[len(Goals) - 1].toJson("map/static/json/target.json")
 
         return Goals

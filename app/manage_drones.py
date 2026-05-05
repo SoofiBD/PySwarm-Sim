@@ -177,15 +177,33 @@ class DroneManager:
 
     @staticmethod
     def ResetUAVs(uavs: List[UAV]):
+        """Reset only drones whose mission is complete or whose target is gone."""
         for uav in uavs:
-            uav.target = None
-            uav.clearMySlaveList()
-            uav.state = "Free"
+            if uav.state == "Leader":
+                target = uav.getTarget()
+                # Target was visited or somehow lost — release the drone
+                if target is None or target.state == "Visited":
+                    uav.clearMySlaveList()
+                    uav.target = None
+                    uav.state = "Free"
+            elif uav.state == "Slave":
+                leader = uav.getMyLeader()
+                # Leader no longer exists or became Free — release slave
+                if leader is None or leader.state == "Free":
+                    uav.my_leader = None
+                    uav.state = "Free"
     
     @staticmethod
-    def ResetGoals(goals: List[Goal]):
+    def ResetGoals(goals: List[Goal], uavs: List[UAV]):
+        """Free goals that are 'Visiting' but no drone is actually pursuing them."""
+        # Build set of goals currently targeted by a Leader drone
+        actively_targeted = set()
+        for uav in uavs:
+            if uav.state == "Leader" and uav.target is not None:
+                actively_targeted.add(id(uav.target))
+
         for goal in goals:
-            if goal.state == "Visiting":
+            if goal.state == "Visiting" and id(goal) not in actively_targeted:
                 goal.state = "Free"
     
     @staticmethod

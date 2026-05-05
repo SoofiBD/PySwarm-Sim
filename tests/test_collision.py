@@ -52,23 +52,37 @@ class TestDroneManager:
         assert free_count == 1
 
     def test_reset_uavs(self):
+        """Leaders with visited/missing targets become Free; active Leaders stay."""
+        visited_goal = Goal(pos=Vector(1, 1, 1), state="Visited")
+        active_goal = Goal(pos=Vector(5, 5, 5), state="Visiting")
         uavs = [
-            UAV(pos=Vector(0, 0, 0), state="Leader", target=Goal(pos=Vector(1, 1, 1))),
-            UAV(pos=Vector(10, 0, 0), state="Free"),
+            UAV(pos=Vector(0, 0, 0), state="Leader", target=visited_goal),
+            UAV(pos=Vector(10, 0, 0), state="Leader", target=active_goal),
+            UAV(pos=Vector(20, 0, 0), state="Free"),
         ]
         DroneManager.ResetUAVs(uavs)
-        for uav in uavs:
-            assert uav.state == "Free"
-            assert uav.target is None
+        # First UAV: target visited → should be freed
+        assert uavs[0].state == "Free"
+        assert uavs[0].target is None
+        # Second UAV: target still active → should stay Leader
+        assert uavs[1].state == "Leader"
+        assert uavs[1].target is active_goal
+        # Third UAV: already Free → stays Free
+        assert uavs[2].state == "Free"
 
     def test_reset_goals(self):
-        goals = [
-            Goal(pos=Vector(0, 0, 0), state="Free"),
-            Goal(pos=Vector(10, 0, 0), state="Visiting"),
+        """Visiting goals with no drone targeting them become Free."""
+        goal1 = Goal(pos=Vector(0, 0, 0), state="Free")
+        goal2 = Goal(pos=Vector(10, 0, 0), state="Visiting")
+        goal3 = Goal(pos=Vector(20, 0, 0), state="Visiting")
+        # Only goal3 has a Leader drone targeting it
+        uavs = [
+            UAV(pos=Vector(0, 0, 0), state="Leader", target=goal3),
         ]
-        DroneManager.ResetGoals(goals)
-        assert goals[0].state == "Free"
-        assert goals[1].state == "Free"
+        DroneManager.ResetGoals([goal1, goal2, goal3], uavs)
+        assert goal1.state == "Free"     # was already Free
+        assert goal2.state == "Free"     # orphaned Visiting → Free
+        assert goal3.state == "Visiting" # actively targeted → stays
 
 
 class TestVelocityImpulseAvoidance:

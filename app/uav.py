@@ -18,7 +18,7 @@ Physical parameters (typical 350-class racing quadcopter):
 """
 
 from collections import deque
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 import numpy as np
 from pydantic import Field
@@ -27,6 +27,9 @@ from app.goal import Goal
 from app.myMath.physics import DronePhysics
 from app.myMath.vector import Vector, VectorOperations
 from app.node import Node
+
+if TYPE_CHECKING:
+    from app.pathfinding import AStarPathfinder
 
 
 class UAV(Node):
@@ -166,7 +169,8 @@ class UAV(Node):
         self.direction = VectorOperations.substract(goal.pos, self.pos)
 
 
-# Resolve forward references
+# Runtime import needed for Pydantic to resolve the "Ground" forward reference
+# in UAV.ground field. AStarPathfinder stays under TYPE_CHECKING since it's
+# only used in method type hints, not as a Pydantic field.
 from app.ground import Ground  # noqa: E402
-from app.pathfinding import AStarPathfinder  # noqa: E402
 UAV.model_rebuild()

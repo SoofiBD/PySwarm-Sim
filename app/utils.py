@@ -6,8 +6,8 @@ class Utils:
     @staticmethod
     def writeToFile(content: str, filePath: str) -> None:
         try:
-            f = open(filePath, "a")
-            f.write(content)
+            with open(filePath, "a") as f:
+                f.write(content)
         except Exception:
             print('>>> traceback <<<')
             traceback.print_exc()

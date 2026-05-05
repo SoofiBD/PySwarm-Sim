@@ -1,7 +1,7 @@
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtCore import Qt
-from View import View
+from app.view import View
 from app.engine import SimulationEngine
 from app.uav import UAV
 from app.goal import Goal
