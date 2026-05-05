@@ -69,3 +69,23 @@ class TestDroneManager:
         DroneManager.ResetGoals(goals)
         assert goals[0].state == "Free"
         assert goals[1].state == "Free"
+
+
+class TestVelocityImpulseAvoidance:
+    def test_resolve_modifies_velocity_not_position(self):
+        # uav1 at (0,0,0), uav2 at (3,0,0): impulse on uav1 is in -x direction (away from +x)
+        uav1 = UAV(pos=Vector(0, 0, 0), velocity=Vector(0, 0, 0))
+        uav2 = UAV(pos=Vector(3, 0, 0), velocity=Vector(0, 0, 0))
+        original_pos1 = Vector(*uav1.pos._data)
+        CollisionDetector.resolve_collision(uav1, uav2)
+        # Position must NOT change
+        assert abs(uav1.pos.x - original_pos1.x) < 1e-9
+        # Velocity must gain a repulsion component away from uav2 (-x direction)
+        assert uav1.velocity.x < 0
+
+    def test_repulsion_direction_is_away_from_other(self):
+        uav1 = UAV(pos=Vector(0, 0, 0), velocity=Vector(0, 0, 0))
+        uav2 = UAV(pos=Vector(0, 4, 0), velocity=Vector(0, 0, 0))
+        CollisionDetector.resolve_collision(uav1, uav2)
+        # uav1 should be pushed in -y direction (away from uav2 at +y)
+        assert uav1.velocity.y < 0

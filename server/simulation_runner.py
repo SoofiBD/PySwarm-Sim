@@ -15,6 +15,7 @@ from app.ground import Ground
 from app.logger import log_simulation_event
 from app.manage_drones import CollisionDetector, DroneManager, DroneNetwork
 from app.myMath.matrixOperation import MatrixOperation
+from app.pathfinding import AStarPathfinder
 from app.uav import UAV
 
 
@@ -41,6 +42,11 @@ class SimulationRunner:
         self.cthr = cthr
         self.running = False
         self._step_count = 0
+        self._pathfinder = AStarPathfinder(
+            grid_resolution=40.0,
+            bounds=(0, 800, 0, 800, 0, 200),
+            obstacle_radius=20.0,
+        )
 
     def stop(self) -> None:
         self.running = False
@@ -102,7 +108,7 @@ class SimulationRunner:
             DroneManager.AssignRelay(self.uavs, adj, self.ground, self.cthr)
             for uav in self.uavs:
                 if uav.getState() == "Slave":
-                    uav.followLeader()
+                    uav.followLeader(dt=self.dt)
 
         # 6. Collision avoidance (KD-tree accelerated — O(N log N))
         CollisionDetector.apply_avoidance(self.uavs)
@@ -111,4 +117,7 @@ class SimulationRunner:
         for uav in self.uavs:
             target = uav.getTarget()
             if target and uav.getState() == "Leader":
-                uav.move(target, dt=self.dt)
+                positions = [u.pos for u in self.uavs if u is not uav]
+                uav.move(target, dt=self.dt,
+                         pathfinder=self._pathfinder,
+                         all_uav_positions=positions)

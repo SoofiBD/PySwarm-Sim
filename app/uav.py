@@ -17,6 +17,7 @@ Physical parameters (typical 350-class racing quadcopter):
     max_thrust  = 30 N   (4 × ~7.5 N motors at ~50 % throttle cruise)
 """
 
+from collections import deque
 from typing import List, Optional
 
 import numpy as np
@@ -46,6 +47,12 @@ class UAV(Node):
     velocity: Vector = Field(default_factory=lambda: Vector(0.0, 0.0, 0.0))
     mass: float = 1.5       # kg
     max_thrust: float = 30.0  # N
+
+    def model_post_init(self, __context) -> None:
+        # _waypoints is a plain deque, not a Pydantic field.
+        # object.__setattr__ bypasses Pydantic's __setattr__ validation so the
+        # deque is not treated as a model field and won't appear in serialization.
+        object.__setattr__(self, '_waypoints', deque())
 
     # ---- Compatibility getters / setters ----
     def getSpeed(self): return self.speed
@@ -79,28 +86,43 @@ class UAV(Node):
         return None
 
     # ---- Movement ----
-    def moveToGround(self, ground: "Ground"):
-        if not VectorOperations.isAlmostEqual(self.pos, ground.pos, self.speed):
-            self.direction = VectorOperations.substract(ground.pos, self.pos)
-            step = VectorOperations.multiply(self.direction.normalize(), self.speed)
-            self.pos = VectorOperations.sum(self.pos, step)
+    def moveToGround(self, ground: "Ground", dt: float = 0.05) -> None:
+        if VectorOperations.isAlmostEqual(self.pos, ground.pos, float(self.speed)):
+            return
+        pos_new_arr, vel_new_arr = DronePhysics.step(
+            pos=self.pos._data.copy(),
+            vel=self.velocity._data.copy(),
+            desired_pos=ground.pos._data.copy(),
+            mass=self.mass,
+            max_thrust=self.max_thrust,
+            dt=dt,
+        )
+        self.pos = Vector(*pos_new_arr)
+        self.velocity = Vector(*vel_new_arr)
 
-    def followLeader(self):
+    def followLeader(self, dt: float = 0.05) -> None:
         leader = self.getLeader()
-        if leader and leader != self:
-            if not VectorOperations.isAlmostEqual(self.pos, leader.pos, self.speed):
-                self.direction = VectorOperations.substract(leader.pos, self.pos)
-                step = VectorOperations.multiply(self.direction.normalize(), self.speed)
-                self.pos = VectorOperations.sum(self.pos, step)
+        if leader is None or leader is self:
+            return
+        if VectorOperations.isAlmostEqual(self.pos, leader.pos, float(self.speed)):
+            return
+        pos_new_arr, vel_new_arr = DronePhysics.step(
+            pos=self.pos._data.copy(),
+            vel=self.velocity._data.copy(),
+            desired_pos=leader.pos._data.copy(),
+            mass=self.mass,
+            max_thrust=self.max_thrust,
+            dt=dt,
+        )
+        self.pos = Vector(*pos_new_arr)
+        self.velocity = Vector(*vel_new_arr)
 
-    def move(self, goal: Goal, dt: float = 0.05) -> None:
+    def move(self, goal: Goal, dt: float = 0.05,
+             pathfinder: "AStarPathfinder | None" = None,
+             all_uav_positions: "list[Vector] | None" = None) -> None:
         """
-        Physics-based movement toward `goal`.
-
-        Uses a PD-controller thrust + gravity + quadratic drag model.
-        The drone is considered to have arrived when it is within `speed`
-        simulation-units of the goal (arrival threshold kept consistent
-        with the old kinematic move for state-machine compatibility).
+        Physics-based movement toward `goal`, following A* waypoints if a
+        pathfinder is provided.  Falls back to direct navigation otherwise.
         """
         if VectorOperations.isAlmostEqual(self.pos, goal.pos, float(self.speed)):
             goal.setState("Visited")
@@ -109,12 +131,32 @@ class UAV(Node):
             self.setState("Free")
             self.target = None
             self.velocity = Vector(0.0, 0.0, 0.0)
+            object.__setattr__(self, '_waypoints', deque())
             return
+
+        # Replan whenever waypoint queue is empty
+        if pathfinder is not None and not self._waypoints:
+            obstacles = [p for p in (all_uav_positions or []) if p is not self.pos]
+            path = pathfinder.find_path(self.pos, goal.pos, obstacles=[
+                Vector(*p._data) for p in obstacles
+            ])
+            if path:
+                object.__setattr__(self, '_waypoints', deque(path))
+
+        # Pick next waypoint target (fall through to direct nav if no path found)
+        wp_target = goal.pos
+        if self._waypoints:
+            wp = self._waypoints[0]
+            if VectorOperations.isAlmostEqual(self.pos, wp, float(self.speed) * 2):
+                self._waypoints.popleft()
+                wp_target = self._waypoints[0] if self._waypoints else goal.pos
+            else:
+                wp_target = wp
 
         pos_new_arr, vel_new_arr = DronePhysics.step(
             pos=self.pos._data.copy(),
             vel=self.velocity._data.copy(),
-            desired_pos=goal.pos._data.copy(),
+            desired_pos=wp_target._data.copy(),
             mass=self.mass,
             max_thrust=self.max_thrust,
             dt=dt,
@@ -126,4 +168,5 @@ class UAV(Node):
 
 # Resolve forward references
 from app.ground import Ground  # noqa: E402
+from app.pathfinding import AStarPathfinder  # noqa: E402
 UAV.model_rebuild()
