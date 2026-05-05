@@ -29,4 +29,5 @@ pip-delete-this-directory.txt
 # Project specific
 .python-version
 
+docs/
 docs/.worktrees/
