@@ -27,7 +27,7 @@ nginx:443 ──TLS──► FastAPI / uvicorn :8000
 git clone https://github.com/SoofiBD/PythonDrone-master
 cd PythonDrone-master
 cp .env.example .env
-# Edit .env: set MAPS_API_KEY to your Google Maps JS API key
+# (Optional) Edit .env: set MAPS_API_KEY to your Google Maps JS API key
 docker compose up --build
 ```
 
@@ -38,7 +38,7 @@ Open `http://localhost` in a browser.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install fastapi "uvicorn[standard]" numpy scipy pydantic python-multipart jinja2
-MAPS_API_KEY=your_key_here uvicorn server.main:app --reload
+uvicorn server.main:app --reload
 ```
 
 Open `http://localhost:8000`.
@@ -47,7 +47,7 @@ Open `http://localhost:8000`.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `MAPS_API_KEY` | **Yes** | — | Google Maps JavaScript API key |
+| `MAPS_API_KEY` | No | — | Google Maps JavaScript API key (if omitted, map loads in development mode) |
 | `N_DRONES` | No | `6` | Number of drones at startup |
 | `N_TARGETS` | No | `8` | Number of targets at startup |
 | `SIM_DT` | No | `0.05` | Simulation timestep (seconds) |
