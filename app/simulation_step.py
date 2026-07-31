@@ -70,7 +70,13 @@ class SimulationStep:
         # 3. Drone-to-drone target sharing over comm graph
         DroneNetwork.share_targets(uavs)
 
-        # 4. Target assignment — each free drone picks its closest free goal
+        # 4. Age free goals so long-waiting targets outrank closer newcomers
+        #    (composite time x distance valuation, see app/valuation.py)
+        for goal in goals:
+            if goal.state == "Free":
+                goal.age_seconds += self.dt
+
+        # 5. Target assignment — each free drone picks the highest-value free goal
         free_uavs = DroneManager.GetFreeUAVNumber(uavs)
         free_goals = DroneManager.GetFreeGoalNumber(goals)
         i = 0
@@ -86,7 +92,7 @@ class SimulationStep:
             i += 1
             iterations += 1
 
-        # 5. Connectivity check & relay assignment
+        # 6. Connectivity check & relay assignment
         components = MatrixOperation.find_conn_comp(adj, self.cthr)
         if self._step_count % 10 == 0:
             log_simulation_event("CONNECTIVITY", f"{len(components)} component(s)")
@@ -97,11 +103,11 @@ class SimulationStep:
                 if uav.getState() == "Slave":
                     uav.followLeader(dt=self.dt)
 
-        # 6. Collision avoidance
+        # 7. Collision avoidance
         resolved = CollisionDetector.apply_avoidance(uavs)
         self.metrics["collisions_resolved"] += resolved
 
-        # 7. Physics-based movement toward assigned target
+        # 8. Physics-based movement toward assigned target
         for uav in uavs:
             target = uav.getTarget()
             if target and uav.getState() == "Leader":

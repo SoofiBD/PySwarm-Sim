@@ -7,6 +7,7 @@ from app.myMath.matrixOperation import MatrixOperation
 from app.uav import UAV
 from app.goal import Goal
 from app.ground import Ground
+from app.valuation import TargetValuation
 
 
 class DroneNetwork:
@@ -151,23 +152,19 @@ class DroneManager:
             
         uav_to_goal_dist = MatrixOperation.UAVtoGoal_AdjMatrix(uavs, goals)
         possible_targets = []
-        
-        # Original logic: Find goals where this UAV is the best candidate or at least a good one
-        # Simplified: Find free goals and pick the closest one
+
+        # Composite valuation (time-waiting x inverse-distance) so goals
+        # that keep losing out to closer competitors don't starve forever.
+        this_uav_idx = uavs.index(this_uav)
         for i, goal in enumerate(goals):
             if goal.state == "Free":
-                # Check if any other free UAV is closer to this goal
-                is_closest = True
-                this_uav_idx = uavs.index(this_uav)
                 dist_to_goal = uav_to_goal_dist[this_uav_idx][i]
-                
-                # Note: The original logic had a complex comparison. 
-                # Keeping it similar but cleaner.
-                possible_targets.append((goal, dist_to_goal))
-        
+                value = TargetValuation.composite_value(goal.age_seconds, dist_to_goal)
+                possible_targets.append((goal, value))
+
         if possible_targets:
-            # Sort by distance and pick the closest
-            possible_targets.sort(key=lambda x: x[1])
+            # Sort by valuation, highest priority first
+            possible_targets.sort(key=lambda x: x[1], reverse=True)
             assigned_goal = possible_targets[0][0]
             assigned_goal.state = "Visiting"
             this_uav.state = "Leader"

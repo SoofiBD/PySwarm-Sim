@@ -87,34 +87,51 @@ class MatrixOperation:
 
     @staticmethod
     def findRiskyLinks(conn_comp: List[List[int]], cthr: float, UAVs: List) -> List[List[int]]:
+        """
+        For each pair of disconnected components, return their closest node
+        pair if a single relay UAV placed between them could bridge both
+        halves (i.e. gap <= 2*cthr). Nodes within the same cthr-connected
+        component never qualify here since find_conn_comp already merges
+        anything <= cthr — that's why the old `dist <= cthr` check always
+        produced an empty list, silently disabling relay assignment.
+        """
         risky_links = []
         uav_pos = [u.getPos()._data for u in UAVs]
-        
+
         for i in range(len(conn_comp)):
             for j in range(i + 1, len(conn_comp)):
-                # For each pair of components, find the closest pair of nodes
+                best_pair = None
+                best_dist = float('inf')
                 for node_i in conn_comp[i]:
                     for node_j in conn_comp[j]:
                         dist = np.linalg.norm(uav_pos[node_i] - uav_pos[node_j])
-                        if dist <= cthr:
-                            risky_links.append([node_i, node_j])
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_pair = [node_i, node_j]
+                if best_pair is not None and best_dist <= 2 * cthr:
+                    risky_links.append(best_pair)
         return risky_links
 
     @staticmethod
     def findRiskyLinks_ground(conn_comp: List[List[int]], cthr: float, UAVs: List, ground) -> List[List[int]]:
+        """Ground-aware variant of findRiskyLinks — see that docstring."""
         risky_links = []
         n_uavs = len(UAVs)
         uav_pos = [u.getPos()._data for u in UAVs]
         ground_pos = ground.getPos()._data
-        
+
         for i in range(len(conn_comp)):
             for j in range(i + 1, len(conn_comp)):
+                best_pair = None
+                best_dist = float('inf')
                 for node_i in conn_comp[i]:
                     for node_j in conn_comp[j]:
-                        # Check distance between two UAVs or a UAV and ground
                         pos_i = uav_pos[node_i] if node_i < n_uavs else ground_pos
                         pos_j = uav_pos[node_j] if node_j < n_uavs else ground_pos
                         dist = np.linalg.norm(pos_i - pos_j)
-                        if dist <= cthr:
-                            risky_links.append([node_i, node_j])
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_pair = [node_i, node_j]
+                if best_pair is not None and best_dist <= 2 * cthr:
+                    risky_links.append(best_pair)
         return risky_links

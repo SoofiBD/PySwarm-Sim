@@ -11,6 +11,7 @@ class Goal(BaseModel):
     goal_no: Optional[int] = Field(default=None, alias="goalNo")
     state: str = "Free"
     color: str = "green"
+    age_seconds: float = Field(default=0.0, alias="ageSeconds")
 
     # Compatibility getters/setters
     def getColor(self): return self.color
