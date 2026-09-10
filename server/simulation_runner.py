@@ -53,6 +53,14 @@ class SimulationRunner:
     async def run_loop(self) -> None:
         self.running = True
         while self.running:
-            self._sim_step.tick(self.uavs, self.goals, self.ground)
-            await self.broadcast_fn(self.uavs, self.goals)
+            try:
+                self._sim_step.tick(self.uavs, self.goals, self.ground)
+            except Exception:
+                import logging
+                logging.getLogger("DroneSimulation").exception("tick failed")
+            try:
+                await self.broadcast_fn(self.uavs, self.goals)
+            except Exception:
+                import logging
+                logging.getLogger("DroneSimulation").exception("broadcast failed")
             await asyncio.sleep(self.dt)

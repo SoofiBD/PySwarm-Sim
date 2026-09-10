@@ -16,21 +16,22 @@ class DroneNetwork:
     COMM_RANGE = 150.0
 
     @staticmethod
-    def build_communication_graph(uavs: List[UAV]) -> Dict[int, List[int]]:
-        adj = MatrixOperation.UAVtoUAV_AdjMatrix(uavs)
+    def build_communication_graph(uavs: List[UAV], adj: "np.ndarray | None" = None) -> Dict[int, List[int]]:
+        if adj is None:
+            adj = MatrixOperation.UAVtoUAV_AdjMatrix(uavs)
         graph: Dict[int, List[int]] = {i: [] for i in range(len(uavs))}
-
+        # vectorized row scan
         for i in range(len(uavs)):
-            for j in range(i + 1, len(uavs)):
-                if 0 < adj[i, j] <= DroneNetwork.COMM_RANGE:
-                    graph[i].append(j)
+            neighbors = np.where((adj[i] > 0) & (adj[i] <= DroneNetwork.COMM_RANGE))[0]
+            for j in neighbors:
+                if j > i:  # add symmetrically once
+                    graph[i].append(int(j))
                     graph[j].append(i)
-
         return graph
 
     @staticmethod
-    def share_targets(uavs: List[UAV]) -> None:
-        graph = DroneNetwork.build_communication_graph(uavs)
+    def share_targets(uavs: List[UAV], adj: "np.ndarray | None" = None) -> None:
+        graph = DroneNetwork.build_communication_graph(uavs, adj=adj)
 
         for uav in uavs:
             uav.known_targets = []
@@ -48,16 +49,17 @@ class DroneNetwork:
                         neighbor.setDistanceToTarget(dist)
 
     @staticmethod
-    def broadcast_position(uavs: List[UAV]) -> Dict[int, Tuple[float, float, float]]:
-        positions: Dict[int, Tuple[float, float, float]] = {}
-        graph = DroneNetwork.build_communication_graph(uavs)
-
-        for i, uav in enumerate(uavs):
-            positions[i] = (uav.pos.x, uav.pos.y, uav.pos.z)
-            for neighbor in graph.get(i, []):
-                pass
-
-        return positions
+    def broadcast_position(uavs: List[UAV]) -> Dict[int, List[Tuple[int, Tuple[float, float, float]]]]:
+        """Return per-UAV neighbor positions for comm-aware planning."""
+        adj = MatrixOperation.UAVtoUAV_AdjMatrix(uavs)
+        graph = DroneNetwork.build_communication_graph(uavs, adj=adj)
+        all_pos: Dict[int, Tuple[float, float, float]] = {
+            i: (u.pos.x, u.pos.y, u.pos.z) for i, u in enumerate(uavs)
+        }
+        result: Dict[int, List[Tuple[int, Tuple[float, float, float]]]] = {}
+        for i in range(len(uavs)):
+            result[i] = [(n, all_pos[n]) for n in graph.get(i, [])]
+        return result
 
 
 class CollisionDetector:
@@ -144,32 +146,31 @@ class CollisionDetector:
 
 class DroneManager:
     """Manages high-level UAV behaviors and assignments."""
-    
+
     @staticmethod
-    def AssignTarget(goals: List[Goal], uavs: List[UAV], this_uav: UAV) -> Optional[Goal]:
+    def AssignTarget(goals: List[Goal], uavs: List[UAV], this_uav: UAV, dist_matrix: "np.ndarray | None" = None) -> Optional[Goal]:
         if not goals:
             return None
-            
-        uav_to_goal_dist = MatrixOperation.UAVtoGoal_AdjMatrix(uavs, goals)
-        possible_targets = []
-
-        # Composite valuation (time-waiting x inverse-distance) so goals
-        # that keep losing out to closer competitors don't starve forever.
-        this_uav_idx = uavs.index(this_uav)
+        if dist_matrix is None:
+            dist_matrix = MatrixOperation.UAVtoGoal_AdjMatrix(uavs, goals)
+        try:
+            this_uav_idx = uavs.index(this_uav)
+        except ValueError:
+            return None
+        possible_targets: list[tuple[Goal, float]] = []
         for i, goal in enumerate(goals):
             if goal.state == "Free":
-                dist_to_goal = uav_to_goal_dist[this_uav_idx][i]
+                dist_to_goal = float(dist_matrix[this_uav_idx, i]) if dist_matrix.size else float("inf")
                 value = TargetValuation.composite_value(goal.age_seconds, dist_to_goal)
                 possible_targets.append((goal, value))
 
         if possible_targets:
-            # Sort by valuation, highest priority first
             possible_targets.sort(key=lambda x: x[1], reverse=True)
             assigned_goal = possible_targets[0][0]
             assigned_goal.state = "Visiting"
+            assigned_goal.age_seconds = 0.0
             this_uav.state = "Leader"
             return assigned_goal
-            
         return None
 
     @staticmethod
@@ -213,91 +214,102 @@ class DroneManager:
 
     @staticmethod
     def ChangeSlaveList(slave_uav: UAV, leader_uav: UAV):
-        """Transfers slaves from one UAV to another."""
-        slaves = slave_uav.my_slave_list.copy()
+        """Transfers slaves from one UAV to another (dedup, target cleared)."""
+        slaves = list(slave_uav.my_slave_list)
         for x in slaves:
             x.target = None
             x.state = "Slave"
             x.my_leader = leader_uav
-            leader_uav.my_slave_list.append(x)
-            slave_uav.my_slave_list.remove(x)
+            if x not in leader_uav.my_slave_list:
+                leader_uav.my_slave_list.append(x)
+        slave_uav.my_slave_list.clear()
+
+    @staticmethod
+    def _attach_slave(slave: UAV, leader: UAV, relay_uavs: List[UAV]) -> None:
+        if slave is leader or slave.my_leader is leader:
+            return
+        # detach from previous leader
+        if slave.my_leader and slave in slave.my_leader.my_slave_list:
+            slave.my_leader.my_slave_list.remove(slave)
+        slave.state = "Slave"
+        slave.my_leader = leader
+        if slave not in leader.my_slave_list:
+            leader.my_slave_list.append(slave)
+        if slave not in relay_uavs:
+            relay_uavs.append(slave)
 
     @staticmethod
     def AssignRelay(uavs: List[UAV], adj: List[List[float]], ground: Optional[Ground] = None, cthr: float = 200) -> List[UAV]:
-        """Complex logic to assign drones as relays when connectivity is threatened."""
-        relay_uavs = []
-        
-        # Calculate components and risky links
+        """Idempotent relay assignment — avoids duplicate slave appends and oscillation."""
+        relay_uavs: List[UAV] = []
         components = MatrixOperation.find_conn_comp(adj, cthr)
+        if len(components) <= 1:
+            return relay_uavs
         if ground:
             risky_links = MatrixOperation.findRiskyLinks_ground(components, cthr, uavs, ground)
         else:
             risky_links = MatrixOperation.findRiskyLinks(components, cthr, uavs)
-            
+
+        seen_pairs: set[tuple[int, int]] = set()
         for link in risky_links:
             idx1, idx2 = link[0], link[1]
             n_uavs = len(uavs)
-            
-            # Skip if either index is ground (represented as len(uavs) in original logic)
             if idx1 >= n_uavs or idx2 >= n_uavs:
                 continue
-            
+            pair_key = (min(idx1, idx2), max(idx1, idx2))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
             uav1, uav2 = uavs[idx1], uavs[idx2]
-            
-            # Logic for different state combinations
+            # Skip if already slaves to same leader
+            if uav1.state == "Slave" and uav2.state == "Slave" and uav1.my_leader is uav2.my_leader:
+                continue
+
             if uav1.state == "Free" and uav2.state == "Free":
-                # Find a leader to follow
-                leader_idx = -1
-                min_dist = float('inf')
-                for i, u in enumerate(uavs):
-                    if u.state == "Leader" and u != uav1:
-                        dist = MatrixOperation.distance(u.pos, uav1.pos)
-                        if dist < min_dist:
-                            min_dist = dist
-                            leader_idx = i
-                
-                if leader_idx != -1:
-                    uav1.state = "Slave"
-                    uav1.my_leader = uavs[leader_idx]
-                    uavs[leader_idx].my_slave_list.append(uav1)
-                    relay_uavs.append(uav1)
-                    
-                    uav2.state = "Slave"
-                    uav2.my_leader = uavs[leader_idx]
-                    uavs[leader_idx].my_slave_list.append(uav2)
-                    relay_uavs.append(uav2)
+                # attach both to nearest leader
+                leader = None
+                min_dist = float("inf")
+                for u in uavs:
+                    if u.state == "Leader":
+                        d = MatrixOperation.distance(u.pos, uav1.pos)
+                        if d < min_dist:
+                            min_dist = d
+                            leader = u
+                if leader is not None:
+                    DroneManager._attach_slave(uav1, leader, relay_uavs)
+                    DroneManager._attach_slave(uav2, leader, relay_uavs)
 
             elif uav1.state == "Leader" and uav2.state == "Leader":
-                dist1 = MatrixOperation.distance(uav1.pos, uav1.target.pos)
-                dist2 = MatrixOperation.distance(uav2.pos, uav2.target.pos)
-                
-                if dist1 > dist2:
+                # farther from its target becomes slave
+                d1 = MatrixOperation.distance(uav1.pos, uav1.target.pos) if uav1.target else float("inf")
+                d2 = MatrixOperation.distance(uav2.pos, uav2.target.pos) if uav2.target else float("inf")
+                if d1 > d2:
                     DroneManager.ChangeSlaveList(uav1, uav2)
-                    uav1.target.state = "Free"
-                    uav1.target = None
+                    if uav1.target:
+                        uav1.target.state = "Free"
+                        uav1.target = None
                     uav1.state = "Slave"
                     uav1.my_leader = uav2
-                    uav2.my_slave_list.append(uav1)
-                    relay_uavs.append(uav1)
+                    if uav1 not in uav2.my_slave_list:
+                        uav2.my_slave_list.append(uav1)
+                    if uav1 not in relay_uavs:
+                        relay_uavs.append(uav1)
                 else:
                     DroneManager.ChangeSlaveList(uav2, uav1)
-                    uav2.target.state = "Free"
-                    uav2.target = None
+                    if uav2.target:
+                        uav2.target.state = "Free"
+                        uav2.target = None
                     uav2.state = "Slave"
                     uav2.my_leader = uav1
-                    uav1.my_slave_list.append(uav2)
-                    relay_uavs.append(uav2)
+                    if uav2 not in uav1.my_slave_list:
+                        uav1.my_slave_list.append(uav2)
+                    if uav2 not in relay_uavs:
+                        relay_uavs.append(uav2)
 
             elif uav1.state == "Leader" and uav2.state == "Free":
-                uav2.state = "Slave"
-                uav2.my_leader = uav1
-                uav1.my_slave_list.append(uav2)
-                relay_uavs.append(uav2)
+                DroneManager._attach_slave(uav2, uav1, relay_uavs)
 
             elif uav1.state == "Free" and uav2.state == "Leader":
-                uav1.state = "Slave"
-                uav1.my_leader = uav2
-                uav2.my_slave_list.append(uav1)
-                relay_uavs.append(uav1)
+                DroneManager._attach_slave(uav1, uav2, relay_uavs)
 
         return relay_uavs

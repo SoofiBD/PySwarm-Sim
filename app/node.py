@@ -1,8 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from app.myMath.vector import Vector
-import json
-import os
+from app.persistence import upsert_by_key
 
 class Node(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -19,16 +18,7 @@ class Node(BaseModel):
     def setIPAddress(self, value): self.ip_address = value
 
     def toJson(self, filePath: str):
-        """Standardized JSON serialization using centralized logic."""
-        if not os.path.exists(filePath):
-            data = []
-        else:
-            with open(filePath, "r") as f:
-                try:
-                    data = json.load(f)
-                except json.JSONDecodeError:
-                    data = []
-
+        """Standardized JSON serialization via centralized persistence."""
         node_data = {
             "ip": self.ip_address,
             "mode": 0,
@@ -37,17 +27,4 @@ class Node(BaseModel):
             "Y": self.pos.y,
             "Z": self.pos.z
         }
-
-        # Update existing or append new
-        found = False
-        for i, item in enumerate(data):
-            if item.get("ip") == self.ip_address:
-                data[i] = node_data
-                found = True
-                break
-        
-        if not found:
-            data.append(node_data)
-
-        with open(filePath, "w") as f:
-            json.dump(data, f, indent=4, sort_keys=True)
+        upsert_by_key(filePath, "ip", self.ip_address, node_data)

@@ -1,8 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from app.myMath.vector import Vector
-import json
-import os
+from app.persistence import upsert_by_key
 
 class Goal(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -24,15 +23,6 @@ class Goal(BaseModel):
     def setGoalNo(self, value): self.goal_no = value
 
     def toJson(self, filePath: str):
-        if not os.path.exists(filePath):
-            data = []
-        else:
-            with open(filePath, "r") as f:
-                try:
-                    data = json.load(f)
-                except json.JSONDecodeError:
-                    data = []
-
         item_data = {
             "goalNo": self.goal_no,
             "state": self.state,
@@ -41,16 +31,4 @@ class Goal(BaseModel):
             "Z": self.pos.z,
             "color": self.color
         }
-
-        found = False
-        for i, item in enumerate(data):
-            if item.get("goalNo") == self.goal_no:
-                data[i] = item_data
-                found = True
-                break
-        
-        if not found:
-            data.append(item_data)
-
-        with open(filePath, "w") as f:
-            json.dump(data, f, indent=4, sort_keys=True)
+        upsert_by_key(filePath, "goalNo", self.goal_no, item_data)

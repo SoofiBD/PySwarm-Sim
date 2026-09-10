@@ -72,12 +72,11 @@ class VectorOperations:
 
     @staticmethod
     def isEqual(v1: Vector, v2: Vector) -> bool:
-        return np.array_equal(v1._data, v2._data)
+        return bool(np.allclose(v1._data, v2._data, atol=1e-9))
 
     @staticmethod
     def isAlmostEqual(v1: Vector, v2: Vector, threshold: float) -> bool:
-        # Replaced the complex logic with a clean distance-based threshold
-        return np.linalg.norm(v1._data - v2._data) <= threshold
+        return float(np.linalg.norm(v1._data - v2._data)) <= threshold
 
     @staticmethod
     def multiply(v1: Vector, scalar: float) -> Vector:
@@ -91,4 +90,13 @@ class VectorOperations:
 
     @staticmethod
     def dotProduct(v1: Vector, v2: Vector) -> float:
-        return np.dot(v1.normalize()._data, v2.normalize()._data)
+        return float(np.dot(v1._data, v2._data))
+
+    @staticmethod
+    def cosineSimilarity(v1: Vector, v2: Vector) -> float:
+        """Cosine similarity = dot(normalized). Kept for old callers expecting normalized dot."""
+        n1 = v1.get_length()
+        n2 = v2.get_length()
+        if n1 < 1e-9 or n2 < 1e-9:
+            return 0.0
+        return float(np.dot(v1._data, v2._data) / (n1 * n2))

@@ -21,7 +21,7 @@ from collections import deque
 from typing import TYPE_CHECKING, List, Optional
 
 import numpy as np
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from app.goal import Goal
 from app.myMath.physics import DronePhysics
@@ -50,12 +50,7 @@ class UAV(Node):
     velocity: Vector = Field(default_factory=lambda: Vector(0.0, 0.0, 0.0))
     mass: float = 1.5       # kg
     max_thrust: float = 30.0  # N
-
-    def model_post_init(self, __context) -> None:
-        # _waypoints is a plain deque, not a Pydantic field.
-        # object.__setattr__ bypasses Pydantic's __setattr__ validation so the
-        # deque is not treated as a model field and won't appear in serialization.
-        object.__setattr__(self, '_waypoints', deque())
+    _waypoints: deque = PrivateAttr(default_factory=deque)
 
     # ---- Compatibility getters / setters ----
     def getSpeed(self): return self.speed
@@ -134,7 +129,7 @@ class UAV(Node):
             self.setState("Free")
             self.target = None
             self.velocity = Vector(0.0, 0.0, 0.0)
-            object.__setattr__(self, '_waypoints', deque())
+            self._waypoints.clear()
             return
 
         # Replan whenever waypoint queue is empty
@@ -144,7 +139,7 @@ class UAV(Node):
                 Vector(*p._data) for p in obstacles
             ])
             if path:
-                object.__setattr__(self, '_waypoints', deque(path))
+                self._waypoints = deque(path)
 
         # Pick next waypoint target (fall through to direct nav if no path found)
         wp_target = goal.pos

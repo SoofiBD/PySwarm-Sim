@@ -25,6 +25,9 @@ import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
+from scipy.spatial import cKDTree
+
 from app.myMath.vector import Vector
 
 
@@ -98,13 +101,20 @@ class AStarPathfinder:
         Start/goal are NOT treated as obstacles even if a drone sits there.
         """
         obstacles = obstacles or []
-        obs_data = [(o.x, o.y, o.z) for o in obstacles]
-
         s = self._snap(start)
         g = self._snap(goal)
 
         if s == g:
             return [goal]
+
+        # build spatial index if many obstacles — O(N log N) query vs O(N) scan
+        tree: cKDTree | None = None
+        obs_data: List[Tuple[float, float, float]] | None = None
+        if len(obstacles) > 20:
+            pts = np.array([(o.x, o.y, o.z) for o in obstacles], dtype=np.float64)
+            tree = cKDTree(pts)
+        else:
+            obs_data = [(o.x, o.y, o.z) for o in obstacles]
 
         # open set: min-heap of _Node
         open_heap: List[_Node] = []
@@ -135,7 +145,7 @@ class AStarPathfinder:
                     continue
                 if not self._in_bounds(nx, ny, nz):
                     continue
-                if self._blocked(nx, ny, nz, obs_data):
+                if self._blocked_kdtree(nx, ny, nz, tree, obs_data):
                     continue
 
                 tentative_g = g_score[current.pos] + cost
@@ -173,6 +183,19 @@ class AStarPathfinder:
         for ox, oy, oz in obs:
             if (x-ox)**2 + (y-oy)**2 + (z-oz)**2 < r2:
                 return True
+        return False
+
+    def _blocked_kdtree(self, x: float, y: float, z: float,
+                        tree: cKDTree | None,
+                        obs: List[Tuple[float, float, float]] | None) -> bool:
+        if tree is not None:
+            # query_ball_point radius = obstacle_radius (strict < r)
+            return bool(tree.query_ball_point([x, y, z], r=self.obstacle_radius - 1e-9))
+        if obs:
+            r2 = self._obs_r2
+            for ox, oy, oz in obs:
+                if (x-ox)**2 + (y-oy)**2 + (z-oz)**2 < r2:
+                    return True
         return False
 
     @staticmethod

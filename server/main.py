@@ -21,7 +21,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel as PydanticBase
+from pydantic import BaseModel as PydanticBase, Field
+from typing import Literal
 
 from app.myMath.vector import Vector
 from app.uav import UAV
@@ -52,11 +53,11 @@ def sim_to_geo(x: float, y: float) -> tuple[float, float]:
 # Request models
 # ---------------------------------------------------------------------------
 class ControlRequest(PydanticBase):
-    action: str  # "start" | "stop" | "reset"
+    action: Literal["start", "stop", "reset"]
 
 class ConfigRequest(PydanticBase):
-    n_drones: int = 6
-    n_targets: int = 8
+    n_drones: int = Field(default=6, ge=1, le=100)
+    n_targets: int = Field(default=8, ge=1, le=200)
 
 
 # ---------------------------------------------------------------------------
@@ -74,12 +75,21 @@ class ConnectionManager:
         self._active.discard(ws)
 
     async def broadcast(self, payload: dict) -> None:
+        if not self._active:
+            return
         text = json.dumps(payload)
         dead: Set[WebSocket] = set()
-        for ws in self._active:
+
+        async def _send(ws: WebSocket) -> WebSocket | None:
             try:
-                await ws.send_text(text)
+                await asyncio.wait_for(ws.send_text(text), timeout=1.0)
+                return None
             except Exception:
+                return ws
+
+        results = await asyncio.gather(*[_send(ws) for ws in list(self._active)], return_exceptions=False)
+        for ws in results:
+            if ws is not None:
                 dead.add(ws)
         self._active.difference_update(dead)
 
@@ -90,6 +100,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 runner: SimulationRunner | None = None
+_runner_task: asyncio.Task | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -166,33 +177,43 @@ def _build_telemetry(uavs: list[UAV], goals: list[Goal]) -> dict:
     return {"type": "telemetry", "drones": drones, "targets": targets}
 
 
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
 # ---------------------------------------------------------------------------
 # FastAPI application lifecycle
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global runner
+    global runner, _runner_task
     n_drones  = int(os.getenv("N_DRONES", "6"))
     n_targets = int(os.getenv("N_TARGETS", "8"))
-    cthr      = float(os.getenv("CTHR", "200.0"))
-    dt        = float(os.getenv("SIM_DT", "0.05"))
+    cthr      = _clamp(float(os.getenv("CTHR", "200.0")), 10.0, 1000.0)
+    dt        = _clamp(float(os.getenv("SIM_DT", "0.05")), 0.01, 0.2)
     uavs, goals, ground = _create_simulation(n_drones=n_drones,
                                               n_targets=n_targets,
                                               cthr=cthr)
     runner = SimulationRunner(uavs, goals, ground,
                               broadcast_fn=_make_broadcast_fn(), dt=dt, cthr=cthr)
-    task = asyncio.create_task(runner.run_loop(), name="simulation")
+    _runner_task = asyncio.create_task(runner.run_loop(), name="simulation")
     yield
     runner.stop()
-    task.cancel()
+    if _runner_task:
+        _runner_task.cancel()
+        try:
+            await _runner_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="DroneSimAPI", version="2.0.0", lifespan=lifespan)
 
+_allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=_allowed_origins,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -229,38 +250,45 @@ async def metrics() -> JSONResponse:
     })
 
 
+async def _restart_runner(n_drones: int = 6, n_targets: int = 8, cthr: float = 200.0, dt: float = 0.05) -> None:
+    global runner, _runner_task
+    if runner:
+        runner.stop()
+    if _runner_task:
+        _runner_task.cancel()
+        try:
+            await _runner_task
+        except asyncio.CancelledError:
+            pass
+    cthr = _clamp(cthr, 10.0, 1000.0)
+    dt = _clamp(dt, 0.01, 0.2)
+    uavs, goals, ground = _create_simulation(n_drones=n_drones, n_targets=n_targets, cthr=cthr)
+    runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_make_broadcast_fn(), dt=dt, cthr=cthr)
+    _runner_task = asyncio.create_task(runner.run_loop(), name="simulation")
+
+
 @app.post("/api/control")
 async def control(req: ControlRequest) -> JSONResponse:
-    global runner
+    global runner, _runner_task
     if req.action == "stop":
         if runner:
             runner.stop()
         return JSONResponse({"status": "stopped"})
     elif req.action == "start":
         if runner and not runner.running:
-            asyncio.create_task(runner.run_loop(), name="simulation")
+            _runner_task = asyncio.create_task(runner.run_loop(), name="simulation")
         return JSONResponse({"status": "started"})
     elif req.action == "reset":
-        if runner:
-            runner.stop()
-        uavs, goals, ground = _create_simulation()
-        runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_make_broadcast_fn())
-        asyncio.create_task(runner.run_loop(), name="simulation")
+        await _restart_runner()
         return JSONResponse({"status": "reset"})
     return JSONResponse({"error": f"unknown action: {req.action}"}, status_code=400)
 
 
 @app.post("/api/config")
 async def configure(req: ConfigRequest) -> JSONResponse:
-    global runner
-    if runner:
-        runner.stop()
-    uavs, goals, ground = _create_simulation(
-        n_drones=req.n_drones,
-        n_targets=req.n_targets,
-    )
-    runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_make_broadcast_fn())
-    asyncio.create_task(runner.run_loop(), name="simulation")
+    cthr = _clamp(float(os.getenv("CTHR", "200.0")), 10.0, 1000.0)
+    dt = _clamp(float(os.getenv("SIM_DT", "0.05")), 0.01, 0.2)
+    await _restart_runner(n_drones=req.n_drones, n_targets=req.n_targets, cthr=cthr, dt=dt)
     return JSONResponse({"status": "reconfigured",
                          "n_drones": req.n_drones,
                          "n_targets": req.n_targets})

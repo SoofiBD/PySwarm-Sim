@@ -67,8 +67,11 @@ class SimulationStep:
         DroneManager.ResetUAVs(uavs)
         DroneManager.ResetGoals(goals, uavs)
 
-        # 3. Drone-to-drone target sharing over comm graph
-        DroneNetwork.share_targets(uavs)
+        # 3. Drone-to-drone target sharing over comm graph (reuse adj for UAV-UAV case)
+        if ground:
+            DroneNetwork.share_targets(uavs)
+        else:
+            DroneNetwork.share_targets(uavs, adj=adj)
 
         # 4. Age free goals so long-waiting targets outrank closer newcomers
         #    (composite time x distance valuation, see app/valuation.py)
@@ -76,21 +79,19 @@ class SimulationStep:
             if goal.state == "Free":
                 goal.age_seconds += self.dt
 
-        # 5. Target assignment — each free drone picks the highest-value free goal
-        free_uavs = DroneManager.GetFreeUAVNumber(uavs)
-        free_goals = DroneManager.GetFreeGoalNumber(goals)
-        i = 0
-        iterations = 0
-        while free_uavs > 0 and free_goals > 0 and iterations < len(uavs):
-            uav = uavs[i % len(uavs)]
-            if uav.getState() == "Free":
-                target = DroneManager.AssignTarget(goals, uavs, uav)
+        # 5. Target assignment — compute distance matrix once, assign globally by valuation
+        #    DroneManager.AssignTarget already computes composite_value; we precompute adjacency once
+        #    and iterate free UAVs in order, assigning highest-value goal per UAV. O(D·G) total not O(D²·G)
+        if any(g.state == "Free" for g in goals):
+            uav_to_goal = MatrixOperation.UAVtoGoal_AdjMatrix(uavs, goals) if goals and uavs else None
+            free_uavs_list = [u for u in uavs if u.getState() == "Free"]
+            for uav in free_uavs_list:
+                if DroneManager.GetFreeGoalNumber(goals) == 0:
+                    break
+                # reuse precomputed distances to avoid re-building matrix inside AssignTarget
+                target = DroneManager.AssignTarget(goals, uavs, uav, dist_matrix=uav_to_goal)
                 if target:
                     uav.setTarget(target)
-                free_uavs -= 1
-                free_goals -= 1
-            i += 1
-            iterations += 1
 
         # 6. Connectivity check & relay assignment
         components = MatrixOperation.find_conn_comp(adj, self.cthr)

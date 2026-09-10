@@ -1,5 +1,6 @@
 import numpy as np
 from typing import List
+from scipy.spatial.distance import cdist
 from app.myMath.vector import Vector
 from app.myMath.matrix import Matrix
 
@@ -14,44 +15,28 @@ class MatrixOperation:
 
     @staticmethod
     def UAVtoUAV_AdjMatrix(UAVs: List) -> np.ndarray:
-        n = len(UAVs)
-        adj = np.zeros((n, n))
-        positions = np.array([u.getPos()._data for u in UAVs])
-        
-        # Optimized vectorized distance calculation
-        for i in range(n):
-            adj[i] = np.linalg.norm(positions - positions[i], axis=1)
-        return adj
+        if not UAVs:
+            return np.zeros((0, 0), dtype=np.float64)
+        positions = np.array([u.getPos()._data for u in UAVs], dtype=np.float64)
+        return cdist(positions, positions).astype(np.float64)
 
     @staticmethod
     def UAVtoGoal_AdjMatrix(UAVs: List, Goals: List) -> np.ndarray:
-        n_uavs = len(UAVs)
-        n_goals = len(Goals)
-        adj = np.zeros((n_uavs, n_goals))
-        uav_pos = np.array([u.getPos()._data for u in UAVs])
-        goal_pos = np.array([g.getPos()._data for g in Goals])
-        
-        for i in range(n_uavs):
-            adj[i] = np.linalg.norm(goal_pos - uav_pos[i], axis=1)
-        return adj
+        if not UAVs or not Goals:
+            return np.zeros((len(UAVs), len(Goals)), dtype=np.float64)
+        uav_pos = np.array([u.getPos()._data for u in UAVs], dtype=np.float64)
+        goal_pos = np.array([g.getPos()._data for g in Goals], dtype=np.float64)
+        return cdist(uav_pos, goal_pos).astype(np.float64)
 
     @staticmethod
     def UAVtoGround_AdjMatrix(UAVs: List, ground) -> np.ndarray:
         n = len(UAVs)
-        adj = np.zeros((n + 1, n + 1))
-        uav_pos = np.array([u.getPos()._data for u in UAVs])
-        ground_pos = ground.getPos()._data
-        
-        # UAV to UAV
-        for i in range(n):
-            adj[i, :n] = np.linalg.norm(uav_pos - uav_pos[i], axis=1)
-            
-        # UAV to Ground
-        dist_to_ground = np.linalg.norm(uav_pos - ground_pos, axis=1)
-        adj[:n, n] = dist_to_ground
-        adj[n, :n] = dist_to_ground
-        adj[n, n] = 0
-        return adj
+        if n == 0:
+            return np.zeros((1, 1), dtype=np.float64)
+        uav_pos = np.array([u.getPos()._data for u in UAVs], dtype=np.float64)
+        ground_pos = np.array(ground.getPos()._data, dtype=np.float64).reshape(1, 3)
+        all_pos = np.vstack([uav_pos, ground_pos])
+        return cdist(all_pos, all_pos).astype(np.float64)
 
     @staticmethod
     def degrees(adj: np.ndarray) -> np.ndarray:
