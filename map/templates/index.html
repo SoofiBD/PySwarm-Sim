@@ -107,7 +107,6 @@
     const statDrones  = document.getElementById("stat-drones");
     const statTargets = document.getElementById("stat-targets");
     const statSpeed   = document.getElementById("stat-speed");
-    const wsStatus    = document.getElementById("ws-status");
 
     window._onTelemetry = function (msg) {
         statDrones.textContent = msg.drones.length;
@@ -118,16 +117,6 @@
             statSpeed.textContent = avg.toFixed(1);
         }
     };
-
-    // Status badge wired to ws open/close events exported from realtime_map.js
-    window.addEventListener("load", () => {
-        const checkWs = setInterval(() => {
-            if (typeof ws === "undefined") return;
-            clearInterval(checkWs);
-            ws.addEventListener("open",  () => { wsStatus.textContent = "Live"; wsStatus.className = "ok"; });
-            ws.addEventListener("close", () => { wsStatus.textContent = "Reconnecting…"; wsStatus.className = "err"; });
-        }, 50);
-    });
 })();
 </script>
 

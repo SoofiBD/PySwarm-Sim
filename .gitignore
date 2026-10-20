@@ -51,3 +51,6 @@ docs/
 # Project specific
 .python-version
 test_pyside.py
+
+# macOS folder icon file
+Icon?

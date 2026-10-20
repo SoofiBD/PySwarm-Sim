@@ -10,14 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml .
 # Install into an isolated prefix so Stage 2 can COPY just the packages
-RUN pip install --no-cache-dir --prefix=/install \
-        fastapi \
-        "uvicorn[standard]" \
-        websockets \
-        numpy \
-        scipy \
-        pydantic \
-        python-multipart
+# Install pyproject's core dependencies only (single source of truth, no desktop/test extras)
+RUN python -c "import tomllib; print('\\n'.join(tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']))" > requirements.txt \
+    && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
 # ── Stage 2: runtime image ────────────────────────────────────────────────────
@@ -28,14 +23,16 @@ WORKDIR /app
 # Copy pre-built packages from Stage 1
 COPY --from=builder /install /usr/local
 
-# Copy source — static assets are served by nginx in production;
-# the map/templates dir is still needed for the root index route.
+# Copy source — static assets are served by nginx in production, but
+# server.main mounts map/static at import time, so the dir must exist here too.
 COPY app/     ./app/
 COPY server/  ./server/
 COPY map/templates/ ./map/templates/
+COPY map/static/    ./map/static/
 
-# Non-root user for security
-RUN addgroup --system drone && adduser --system --ingroup drone drone
+# Non-root user for security; app/logger.py writes to /app/logs
+RUN addgroup --system drone && adduser --system --ingroup drone drone \
+    && mkdir -p /app/logs && chown drone:drone /app/logs
 USER drone
 
 EXPOSE 8000

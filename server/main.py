@@ -13,10 +13,11 @@ import asyncio
 import json
 import math
 import os
+import secrets
 from contextlib import asynccontextmanager
 from typing import Set
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -101,6 +102,15 @@ class ConnectionManager:
 manager = ConnectionManager()
 runner: SimulationRunner | None = None
 _runner_task: asyncio.Task | None = None
+# Serialises start/stop/reset/config so two requests can't spawn two loops.
+_control_lock = asyncio.Lock()
+
+
+def _require_admin(x_admin_token: str | None = Header(default=None)) -> None:
+    # Unset ADMIN_TOKEN = local dev, endpoints open. docker-compose requires it.
+    expected = os.getenv("ADMIN_TOKEN", "")
+    if expected and not secrets.compare_digest(x_admin_token or "", expected):
+        raise HTTPException(status_code=401, detail="invalid admin token")
 
 
 # ---------------------------------------------------------------------------
@@ -198,13 +208,7 @@ async def lifespan(app: FastAPI):
                               broadcast_fn=_make_broadcast_fn(), dt=dt, cthr=cthr)
     _runner_task = asyncio.create_task(runner.run_loop(), name="simulation")
     yield
-    runner.stop()
-    if _runner_task:
-        _runner_task.cancel()
-        try:
-            await _runner_task
-        except asyncio.CancelledError:
-            pass
+    await _stop_runner()
 
 
 app = FastAPI(title="DroneSimAPI", version="2.0.0", lifespan=lifespan)
@@ -250,8 +254,9 @@ async def metrics() -> JSONResponse:
     })
 
 
-async def _restart_runner(n_drones: int = 6, n_targets: int = 8, cthr: float = 200.0, dt: float = 0.05) -> None:
-    global runner, _runner_task
+async def _stop_runner() -> None:
+    # Cancel (not just flag) so a sleeping loop can't wake up after a quick restart.
+    global _runner_task
     if runner:
         runner.stop()
     if _runner_task:
@@ -260,6 +265,12 @@ async def _restart_runner(n_drones: int = 6, n_targets: int = 8, cthr: float = 2
             await _runner_task
         except asyncio.CancelledError:
             pass
+        _runner_task = None
+
+
+async def _restart_runner(n_drones: int = 6, n_targets: int = 8, cthr: float = 200.0, dt: float = 0.05) -> None:
+    global runner, _runner_task
+    await _stop_runner()
     cthr = _clamp(cthr, 10.0, 1000.0)
     dt = _clamp(dt, 0.01, 0.2)
     uavs, goals, ground = _create_simulation(n_drones=n_drones, n_targets=n_targets, cthr=cthr)
@@ -267,28 +278,29 @@ async def _restart_runner(n_drones: int = 6, n_targets: int = 8, cthr: float = 2
     _runner_task = asyncio.create_task(runner.run_loop(), name="simulation")
 
 
-@app.post("/api/control")
+@app.post("/api/control", dependencies=[Depends(_require_admin)])
 async def control(req: ControlRequest) -> JSONResponse:
-    global runner, _runner_task
-    if req.action == "stop":
-        if runner:
-            runner.stop()
-        return JSONResponse({"status": "stopped"})
-    elif req.action == "start":
-        if runner and not runner.running:
-            _runner_task = asyncio.create_task(runner.run_loop(), name="simulation")
-        return JSONResponse({"status": "started"})
-    elif req.action == "reset":
-        await _restart_runner()
-        return JSONResponse({"status": "reset"})
+    global _runner_task
+    async with _control_lock:
+        if req.action == "stop":
+            await _stop_runner()
+            return JSONResponse({"status": "stopped"})
+        elif req.action == "start":
+            if runner and _runner_task is None:
+                _runner_task = asyncio.create_task(runner.run_loop(), name="simulation")
+            return JSONResponse({"status": "started"})
+        elif req.action == "reset":
+            await _restart_runner()
+            return JSONResponse({"status": "reset"})
     return JSONResponse({"error": f"unknown action: {req.action}"}, status_code=400)
 
 
-@app.post("/api/config")
+@app.post("/api/config", dependencies=[Depends(_require_admin)])
 async def configure(req: ConfigRequest) -> JSONResponse:
     cthr = _clamp(float(os.getenv("CTHR", "200.0")), 10.0, 1000.0)
     dt = _clamp(float(os.getenv("SIM_DT", "0.05")), 0.01, 0.2)
-    await _restart_runner(n_drones=req.n_drones, n_targets=req.n_targets, cthr=cthr, dt=dt)
+    async with _control_lock:
+        await _restart_runner(n_drones=req.n_drones, n_targets=req.n_targets, cthr=cthr, dt=dt)
     return JSONResponse({"status": "reconfigured",
                          "n_drones": req.n_drones,
                          "n_targets": req.n_targets})

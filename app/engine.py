@@ -46,10 +46,7 @@ class SimulationEngine(QThread):
         self.running = True
         while self.running:
             if not self.is_paused:
-                with self._lock:
-                    uavs, goals, ground = self.uavs, self.goals, self.ground
-                # tick outside lock where possible? but uavs list mutated, so copy ref is okay;
-                # tick mutates UAV objects — keep lock for full tick to avoid set_data race
+                # tick mutates UAV objects — hold lock for the full tick to avoid set_data race
                 with self._lock:
                     self._sim_step.tick(self.uavs, self.goals, self.ground)
                 self.updated.emit()

@@ -91,12 +91,3 @@ class VectorOperations:
     @staticmethod
     def dotProduct(v1: Vector, v2: Vector) -> float:
         return float(np.dot(v1._data, v2._data))
-
-    @staticmethod
-    def cosineSimilarity(v1: Vector, v2: Vector) -> float:
-        """Cosine similarity = dot(normalized). Kept for old callers expecting normalized dot."""
-        n1 = v1.get_length()
-        n2 = v2.get_length()
-        if n1 < 1e-9 or n2 < 1e-9:
-            return 0.0
-        return float(np.dot(v1._data, v2._data) / (n1 * n2))

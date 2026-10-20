@@ -6,6 +6,7 @@ from app.myMath.vector import Vector
 from app.uav import UAV
 from app.goal import Goal
 from app.manage_drones import CollisionDetector, DroneManager
+from app.myMath.matrixOperation import MatrixOperation
 
 
 class TestCollisionDetector:
@@ -103,3 +104,23 @@ class TestVelocityImpulseAvoidance:
         CollisionDetector.resolve_collision(uav1, uav2)
         # uav1 should be pushed in -y direction (away from uav2 at +y)
         assert uav1.velocity.y < 0
+
+def test_co_located_drones_are_detected_and_pushed_apart():
+    a, b = UAV(pos=Vector(100, 100, 50)), UAV(pos=Vector(100, 100, 50))
+    assert CollisionDetector.apply_avoidance([a, b]) == 1
+    assert a.velocity.x != 0 or b.velocity.x != 0
+
+
+def test_relay_slave_flies_to_link_midpoint_not_leader():
+    leader = UAV(pos=Vector(100, 100, 50))
+    leader.target = Goal(pos=Vector(50, 50, 50))
+    leader.state = "Leader"
+    free = UAV(pos=Vector(400, 100, 50))  # 300 m away: disconnected at cthr=200, bridgeable (<= 2*cthr)
+    uavs = [leader, free]
+
+    DroneManager.AssignRelay(uavs, MatrixOperation.UAVtoUAV_AdjMatrix(uavs), None, cthr=200.0)
+    assert free.state == "Slave"
+    for _ in range(400):
+        free.followLeader(dt=0.05)
+    # midpoint of the broken link, within cthr of both ends — not on top of the leader
+    assert abs(free.pos.x - 250) < 10

@@ -96,14 +96,14 @@ function initMap() {
 // ── WebSocket ────────────────────────────────────────────────────────────────
 function _connectWebSocket() {
     ws = new WebSocket(WS_URL);
-    ws.onopen    = () => { console.log("[WS] connected"); _updateStatus("Connected"); };
-    ws.onclose   = () => { console.warn("[WS] closed — retrying in 3 s"); _updateStatus("Reconnecting…"); setTimeout(_connectWebSocket, 3000); };
+    ws.onopen    = () => { console.log("[WS] connected"); _updateStatus("Live", true); };
+    ws.onclose   = () => { console.warn("[WS] closed — retrying in 3 s"); _updateStatus("Reconnecting…", false); setTimeout(_connectWebSocket, 3000); };
     ws.onerror   = (e) => console.error("[WS] error", e);
     ws.onmessage = _onMessage;
-
-    // Send a ping every 20 s to keep the server-side receive loop alive
-    setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send("ping"); }, 20_000);
 }
+
+// One ping timer for the page (not per reconnect) keeps the server-side receive loop alive
+setInterval(() => { if (ws && ws.readyState === WebSocket.OPEN) ws.send("ping"); }, 20_000);
 
 function _onMessage(event) {
     const msg = JSON.parse(event.data);
@@ -256,9 +256,11 @@ function _droneInfoHtml(d) {
     </div>`;
 }
 
-function _updateStatus(msg) {
+function _updateStatus(msg, ok) {
     const el = document.getElementById("ws-status");
-    if (el) el.textContent = msg;
+    if (!el) return;
+    el.textContent = msg;
+    el.className = ok ? "ok" : "err";
 }
 
 // External hook — set window._onTelemetry = (msg) => { ... } to receive

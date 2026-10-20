@@ -12,6 +12,8 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       MAPS_API_KEY:  "${MAPS_API_KEY}"
+      # Required: protects POST /api/control and /api/config
+      ADMIN_TOKEN:   "${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}"
       N_DRONES:      "${N_DRONES:-6}"
       N_TARGETS:     "${N_TARGETS:-8}"
       SIM_DT:        "${SIM_DT:-0.05}"

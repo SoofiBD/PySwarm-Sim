@@ -75,3 +75,23 @@ class TestAStarPathfinder:
         uav.move(goal, dt=0.05, pathfinder=pf, all_uav_positions=[])
         # Drone should have moved from its starting position
         assert uav.pos.x != pos_before.x or uav.pos.y != pos_before.y
+
+    def test_drone_parked_on_goal_does_not_block_it(self):
+        start = Vector(0, 0, 40)
+        goal = Vector(200, 200, 40)
+        path = self.pf.find_path(start, goal, obstacles=[Vector(200, 200, 40)])
+        assert path is not None
+
+    def test_waypoints_dropped_when_target_changes(self):
+        from app.uav import UAV
+        from app.goal import Goal
+
+        pf = AStarPathfinder(grid_resolution=40.0,
+                             bounds=(0, 800, 0, 800, 0, 200),
+                             obstacle_radius=20.0)
+        uav = UAV(pos=Vector(100, 100, 40))
+        uav.move(Goal(pos=Vector(700, 100, 40)), dt=0.05, pathfinder=pf, all_uav_positions=[])
+        new_goal = Goal(pos=Vector(100, 700, 40))
+        uav.move(new_goal, dt=0.05, pathfinder=pf, all_uav_positions=[])
+        # every remaining waypoint must lead toward the new goal, not the old one (x=700)
+        assert all(wp.x < 200 for wp in uav._waypoints)

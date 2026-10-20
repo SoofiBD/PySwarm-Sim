@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple
 
 import numpy as np
 from scipy.spatial import cKDTree  # O(N log N) spatial queries
@@ -7,59 +7,8 @@ from app.myMath.matrixOperation import MatrixOperation
 from app.uav import UAV
 from app.goal import Goal
 from app.ground import Ground
+from app.myMath.vector import Vector
 from app.valuation import TargetValuation
-
-
-class DroneNetwork:
-    """Manages drone-to-drone communication and target sharing."""
-
-    COMM_RANGE = 150.0
-
-    @staticmethod
-    def build_communication_graph(uavs: List[UAV], adj: "np.ndarray | None" = None) -> Dict[int, List[int]]:
-        if adj is None:
-            adj = MatrixOperation.UAVtoUAV_AdjMatrix(uavs)
-        graph: Dict[int, List[int]] = {i: [] for i in range(len(uavs))}
-        # vectorized row scan
-        for i in range(len(uavs)):
-            neighbors = np.where((adj[i] > 0) & (adj[i] <= DroneNetwork.COMM_RANGE))[0]
-            for j in neighbors:
-                if j > i:  # add symmetrically once
-                    graph[i].append(int(j))
-                    graph[j].append(i)
-        return graph
-
-    @staticmethod
-    def share_targets(uavs: List[UAV], adj: "np.ndarray | None" = None) -> None:
-        graph = DroneNetwork.build_communication_graph(uavs, adj=adj)
-
-        for uav in uavs:
-            uav.known_targets = []
-
-        for i, uav in enumerate(uavs):
-            target = uav.getTarget()
-            if target:
-                uav.distance_to_target = float(MatrixOperation.distance(uav.pos, target.pos))
-                for neighbor_idx in graph.get(i, []):
-                    neighbor = uavs[neighbor_idx]
-                    if neighbor.getState() == "Free":
-                        dist = float(MatrixOperation.distance(neighbor.pos, target.pos))
-                        if target not in neighbor.known_targets:
-                            neighbor.known_targets.append(target)
-                        neighbor.setDistanceToTarget(dist)
-
-    @staticmethod
-    def broadcast_position(uavs: List[UAV]) -> Dict[int, List[Tuple[int, Tuple[float, float, float]]]]:
-        """Return per-UAV neighbor positions for comm-aware planning."""
-        adj = MatrixOperation.UAVtoUAV_AdjMatrix(uavs)
-        graph = DroneNetwork.build_communication_graph(uavs, adj=adj)
-        all_pos: Dict[int, Tuple[float, float, float]] = {
-            i: (u.pos.x, u.pos.y, u.pos.z) for i, u in enumerate(uavs)
-        }
-        result: Dict[int, List[Tuple[int, Tuple[float, float, float]]]] = {}
-        for i in range(len(uavs)):
-            result[i] = [(n, all_pos[n]) for n in graph.get(i, [])]
-        return result
 
 
 class CollisionDetector:
@@ -94,12 +43,9 @@ class CollisionDetector:
         # query_pairs returns a set of (i, j) index pairs with i < j
         pairs = tree.query_pairs(CollisionDetector.MIN_SAFE_DISTANCE)
 
-        result: List[Tuple[UAV, UAV, float]] = []
-        for i, j in pairs:
-            dist = float(np.linalg.norm(positions[i] - positions[j]))
-            if dist > 0:  # skip perfectly co-located (avoid zero-div in resolve)
-                result.append((uavs[i], uavs[j], dist))
-        return result
+        # co-located pairs (dist 0) included: resolve_collision nudges them along +X
+        return [(uavs[i], uavs[j], float(np.linalg.norm(positions[i] - positions[j])))
+                for i, j in pairs]
 
     REPULSION_SPEED: float = 2.0  # m/s impulse magnitude
 
@@ -117,7 +63,6 @@ class CollisionDetector:
         else:
             direction = delta / norm
 
-        from app.myMath.vector import Vector
         impulse = direction * CollisionDetector.REPULSION_SPEED
         uav.velocity = Vector(*(uav.velocity._data + impulse))
 
@@ -250,6 +195,8 @@ class DroneManager:
         else:
             risky_links = MatrixOperation.findRiskyLinks(components, cthr, uavs)
 
+        for u in uavs:
+            u.relay_point = None
         seen_pairs: set[tuple[int, int]] = set()
         for link in risky_links:
             idx1, idx2 = link[0], link[1]
@@ -261,9 +208,8 @@ class DroneManager:
                 continue
             seen_pairs.add(pair_key)
             uav1, uav2 = uavs[idx1], uavs[idx2]
-            # Skip if already slaves to same leader
-            if uav1.state == "Slave" and uav2.state == "Slave" and uav1.my_leader is uav2.my_leader:
-                continue
+            # Gap <= 2*cthr, so the midpoint is within cthr of both ends: a slave there bridges them
+            midpoint = Vector(*((uav1.pos._data + uav2.pos._data) / 2))
 
             if uav1.state == "Free" and uav2.state == "Free":
                 # attach both to nearest leader
@@ -311,5 +257,9 @@ class DroneManager:
 
             elif uav1.state == "Free" and uav2.state == "Leader":
                 DroneManager._attach_slave(uav1, uav2, relay_uavs)
+
+            for u in (uav1, uav2):
+                if u.state == "Slave":
+                    u.relay_point = midpoint
 
         return relay_uavs

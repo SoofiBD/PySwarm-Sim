@@ -37,7 +37,7 @@ Open `http://localhost` in a browser.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install fastapi "uvicorn[standard]" numpy scipy pydantic python-multipart jinja2
+pip install -e ".[test]"          # add ,desktop for the PySide6 UI (python run.py)
 uvicorn server.main:app --reload
 ```
 
@@ -47,6 +47,7 @@ Open `http://localhost:8000`.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
+| `ADMIN_TOKEN` | Yes (Docker) | — | Required in `X-Admin-Token` header for `POST /api/*`; if unset (local dev) those endpoints are open |
 | `MAPS_API_KEY` | No | — | Google Maps JavaScript API key (if omitted, map loads in development mode) |
 | `N_DRONES` | No | `6` | Number of drones at startup |
 | `N_TARGETS` | No | `8` | Number of targets at startup |
@@ -99,7 +100,7 @@ pip install pytest pytest-asyncio
 pytest tests/ -v
 ```
 
-Expected: 45 tests, all passing.
+Expected: 51 tests, all passing.
 
 ## Deployment (VPS)
 
@@ -119,7 +120,7 @@ PythonDrone-master/
 │   │   ├── vector.py           # Vector / VectorOperations (numpy-backed)
 │   │   └── matrixOperation.py  # Adjacency matrices, connectivity
 │   ├── pathfinding.py          # AStarPathfinder — 3D grid A*
-│   ├── manage_drones.py        # CollisionDetector, DroneNetwork, DroneManager
+│   ├── manage_drones.py        # CollisionDetector, DroneManager (targets, relays)
 │   ├── uav.py                  # UAV domain model + physics movement
 │   └── goal.py                 # Goal domain model
 ├── server/
@@ -132,5 +133,5 @@ PythonDrone-master/
 ├── Dockerfile.backend          # Multi-stage Python build
 ├── docker-compose.yml          # Orchestration
 ├── .env.example                # Environment variable reference
-└── tests/                      # pytest test suite (45 tests)
+└── tests/                      # pytest test suite (51 tests)
 ```

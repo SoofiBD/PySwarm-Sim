@@ -5,28 +5,28 @@ description = "Heterogeneous Flying Ad-hoc Networks (FANET) Test Environment"
 authors = [
     {name = "SoofiBD", email = "burakduvakli@hotmail.com"}
 ]
+# Core = what the FastAPI server needs (Dockerfile.backend installs exactly this list)
 dependencies = [
-    # Desktop UI (original path — kept for backward compat)
-    "PySide6>=6.0.0",
-    # Core math
     "numpy>=1.24.0",
     "scipy>=1.11.0",
-    # Physics / visualisation
-    "matplotlib>=3.7.0",
-    # Domain models
     "pydantic>=2.0.0",
-    # WebSocket server (new real-time path)
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.27.0",
     "websockets>=12.0",
     "python-multipart>=0.0.9",
     "jinja2>=3.1.0",
-    # Utilities
-    "requests",
-    # Testing
+]
+
+[project.optional-dependencies]
+# PySide6 desktop UI (run.py)
+desktop = [
+    "PySide6>=6.0.0",
+    "matplotlib>=3.7.0",
+]
+test = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.23.0",
-    "httpx>=0.27.0",          # async test client for FastAPI
+    "httpx>=0.27.0",
     "pytest-cov>=4.0.0",
 ]
 

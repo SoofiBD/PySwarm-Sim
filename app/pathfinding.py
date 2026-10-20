@@ -119,12 +119,10 @@ class AStarPathfinder:
         # open set: min-heap of _Node
         open_heap: List[_Node] = []
         g_score: Dict[Tuple[float, float, float], float] = {s: 0.0}
-        in_open: Dict[Tuple[float, float, float], float] = {}  # pos → best f seen
         closed: set = set()
 
         start_node = _Node(f=self._h(s, g), g=0.0, pos=s)
         heapq.heappush(open_heap, start_node)
-        in_open[s] = start_node.f
 
         while open_heap:
             current = heapq.heappop(open_heap)
@@ -145,7 +143,8 @@ class AStarPathfinder:
                     continue
                 if not self._in_bounds(nx, ny, nz):
                     continue
-                if self._blocked_kdtree(nx, ny, nz, tree, obs_data):
+                # goal is never an obstacle (a drone parked near it must not make it unreachable)
+                if nb != g and self._blocked_kdtree(nx, ny, nz, tree, obs_data):
                     continue
 
                 tentative_g = g_score[current.pos] + cost
@@ -156,7 +155,6 @@ class AStarPathfinder:
                 f = tentative_g + self._h(nb, g)
                 node = _Node(f=f, g=tentative_g, pos=nb, parent=current)
                 heapq.heappush(open_heap, node)
-                in_open[nb] = f
 
         return None  # unreachable
 
@@ -176,14 +174,6 @@ class AStarPathfinder:
         return (self.xmin <= x <= self.xmax and
                 self.ymin <= y <= self.ymax and
                 self.zmin <= z <= self.zmax)
-
-    def _blocked(self, x: float, y: float, z: float,
-                 obs: List[Tuple[float, float, float]]) -> bool:
-        r2 = self._obs_r2
-        for ox, oy, oz in obs:
-            if (x-ox)**2 + (y-oy)**2 + (z-oz)**2 < r2:
-                return True
-        return False
 
     def _blocked_kdtree(self, x: float, y: float, z: float,
                         tree: cKDTree | None,

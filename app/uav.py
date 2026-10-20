@@ -42,15 +42,15 @@ class UAV(Node):
     my_leader: Optional["UAV"] = Field(default=None, alias="myLeader")
     my_slave_list: List["UAV"] = Field(default_factory=list, alias="mySlaveList")
     target: Optional[Goal] = None
+    relay_point: Optional[Vector] = None  # set by AssignRelay: where a slave bridges a broken link
     uav_no: Optional[int] = Field(default=None, alias="UAVNo")
-    known_targets: List[Goal] = Field(default_factory=list, alias="knownTargets")
-    distance_to_target: float = Field(default=0.0, alias="distanceToTarget")
 
     # ---- Physics state ----
     velocity: Vector = Field(default_factory=lambda: Vector(0.0, 0.0, 0.0))
     mass: float = 1.5       # kg
     max_thrust: float = 30.0  # N
     _waypoints: deque = PrivateAttr(default_factory=deque)
+    _wp_goal: Optional[Goal] = PrivateAttr(default=None)  # goal the waypoints lead to
 
     # ---- Compatibility getters / setters ----
     def getSpeed(self): return self.speed
@@ -64,11 +64,6 @@ class UAV(Node):
     def getMySlaveListComplete(self): return self.my_slave_list
     def getUAVNo(self): return self.uav_no
     def setUAVNo(self, v): self.uav_no = v
-    def getKnownTargets(self): return self.known_targets
-    def setKnownTargets(self, v): self.known_targets = v
-    def addKnownTarget(self, goal): self.known_targets.append(goal)
-    def getDistanceToTarget(self): return self.distance_to_target
-    def setDistanceToTarget(self, v): self.distance_to_target = v
 
     def clearMySlaveList(self):
         if self.my_slave_list:
@@ -102,12 +97,13 @@ class UAV(Node):
         leader = self.getLeader()
         if leader is None or leader is self:
             return
-        if VectorOperations.isAlmostEqual(self.pos, leader.pos, float(self.speed)):
+        desired = self.relay_point or leader.pos
+        if VectorOperations.isAlmostEqual(self.pos, desired, float(self.speed)):
             return
         pos_new_arr, vel_new_arr = DronePhysics.step(
             pos=self.pos._data.copy(),
             vel=self.velocity._data.copy(),
-            desired_pos=leader.pos._data.copy(),
+            desired_pos=desired._data.copy(),
             mass=self.mass,
             max_thrust=self.max_thrust,
             dt=dt,
@@ -132,14 +128,19 @@ class UAV(Node):
             self._waypoints.clear()
             return
 
+        # Target changed (relay demotion, reassignment) — old path leads elsewhere
+        if goal is not self._wp_goal:
+            self._waypoints.clear()
+            self._wp_goal = goal
+
         # Replan whenever waypoint queue is empty
         if pathfinder is not None and not self._waypoints:
             obstacles = [p for p in (all_uav_positions or []) if p is not self.pos]
             path = pathfinder.find_path(self.pos, goal.pos, obstacles=[
                 Vector(*p._data) for p in obstacles
             ])
-            if path:
-                self._waypoints = deque(path)
+            # no path: fly direct, and don't rerun a failed full search every tick
+            self._waypoints = deque(path or [goal.pos])
 
         # Pick next waypoint target (fall through to direct nav if no path found)
         wp_target = goal.pos

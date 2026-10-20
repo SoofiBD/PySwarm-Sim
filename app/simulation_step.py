@@ -11,7 +11,7 @@ from typing import List, Optional
 from app.goal import Goal
 from app.ground import Ground
 from app.logger import log_simulation_event
-from app.manage_drones import CollisionDetector, DroneManager, DroneNetwork
+from app.manage_drones import CollisionDetector, DroneManager
 from app.myMath.matrixOperation import MatrixOperation
 from app.pathfinding import AStarPathfinder
 from app.uav import UAV
@@ -67,19 +67,13 @@ class SimulationStep:
         DroneManager.ResetUAVs(uavs)
         DroneManager.ResetGoals(goals, uavs)
 
-        # 3. Drone-to-drone target sharing over comm graph (reuse adj for UAV-UAV case)
-        if ground:
-            DroneNetwork.share_targets(uavs)
-        else:
-            DroneNetwork.share_targets(uavs, adj=adj)
-
-        # 4. Age free goals so long-waiting targets outrank closer newcomers
+        # 3. Age free goals so long-waiting targets outrank closer newcomers
         #    (composite time x distance valuation, see app/valuation.py)
         for goal in goals:
             if goal.state == "Free":
                 goal.age_seconds += self.dt
 
-        # 5. Target assignment — compute distance matrix once, assign globally by valuation
+        # 4. Target assignment — compute distance matrix once, assign globally by valuation
         #    DroneManager.AssignTarget already computes composite_value; we precompute adjacency once
         #    and iterate free UAVs in order, assigning highest-value goal per UAV. O(D·G) total not O(D²·G)
         if any(g.state == "Free" for g in goals):
@@ -93,7 +87,7 @@ class SimulationStep:
                 if target:
                     uav.setTarget(target)
 
-        # 6. Connectivity check & relay assignment
+        # 5. Connectivity check & relay assignment
         components = MatrixOperation.find_conn_comp(adj, self.cthr)
         if self._step_count % 10 == 0:
             log_simulation_event("CONNECTIVITY", f"{len(components)} component(s)")
@@ -104,11 +98,11 @@ class SimulationStep:
                 if uav.getState() == "Slave":
                     uav.followLeader(dt=self.dt)
 
-        # 7. Collision avoidance
+        # 6. Collision avoidance
         resolved = CollisionDetector.apply_avoidance(uavs)
         self.metrics["collisions_resolved"] += resolved
 
-        # 8. Physics-based movement toward assigned target
+        # 7. Physics-based movement toward assigned target
         for uav in uavs:
             target = uav.getTarget()
             if target and uav.getState() == "Leader":
