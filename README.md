@@ -53,7 +53,7 @@ Open `http://localhost:8000`.
 | `N_TARGETS` | No | `8` | Number of targets at startup |
 | `SIM_DT` | No | `0.05` | Simulation timestep (seconds) |
 | `CTHR` | No | `200.0` | Communication range threshold (metres) |
-| `SWARM_KEY` | No | dev key | Hex HMAC key for drone packets. If unset or empty a built-in development key is used and a warning is logged |
+| `SWARM_KEY` | No | dev key | Hex HMAC key for drone packets, at least 16 bytes (32 hex characters). If unset or empty a built-in development key is used and a warning is logged |
 | `COMM_MODE` | No | `ideal` | Startup comm mode: `ideal`, `fixed_rate` or `predictive`. An invalid value falls back to `ideal`. `POST /api/config` overrides it on restart |
 
 ## REST API
@@ -63,8 +63,7 @@ Open `http://localhost:8000`.
 | `GET` | `/api/status` | WebSocket client count + simulation running state |
 | `GET` | `/api/metrics` | Step count, collisions resolved, targets visited |
 | `POST` | `/api/control` | `{"action": "start" \| "stop" \| "reset"}` |
-| `POST` | `/api/config` | `{"n_drones": N, "n_targets": M}` — reconfigures and restarts |
-| `POST` | `/api/config` | also accepts `"comm_mode": "ideal" \| "fixed_rate" \| "predictive"` (default `ideal`) |
+| `POST` | `/api/config` | `{"n_drones": N, "n_targets": M, "comm_mode": "ideal" \| "fixed_rate" \| "predictive"}` — reconfigures and restarts. `comm_mode` is optional (default `ideal`) |
 | `POST` | `/api/fault` | `{"kind": "gps_spoof" \| "replay", "drone_id": N \| null}` — injects a fault, needs `X-Admin-Token`. 409 in `ideal` mode, 404 for an unknown drone. Replay transmits from the swarm centroid |
 
 When comm mode is not `ideal`, `/api/metrics` also returns a `comm` object and each telemetry drone carries `trust`, `quarantined` and `suspect`. The map shows quarantined drones in red and suspect ones in orange.
@@ -91,15 +90,15 @@ Packet layout (little-endian):
 Modes:
 
 - `ideal`: no comm layer.
-- `fixed_rate`: every drone sends once per heartbeat (1 s).
-- `predictive`: a drone sends only when a small predictor (constant velocity or a tiny MLP) of its position, as the peers would estimate it, drifts more than 5 m from the real one, plus the heartbeat. A link is dropped after 3 s of silence.
+- `fixed_rate`: every drone sends a packet every simulation tick (20 Hz at the default 50 ms step).
+- `predictive`: a drone sends only when a small predictor (constant velocity or a tiny MLP) of its position, as the peers would estimate it, drifts more than 5 m from the real one, plus the heartbeat. A link is dropped after 3 s of silence. Relay assignment waits for the first 3 s so the swarm isn't split up before anyone has heard anyone.
 
-Each receiver keeps a per-peer trust score from prediction error and RSSI consistency. A peer is quarantined when at least two hearers exist and a strict majority of them score it below the trust threshold.
+Each receiver keeps a per-peer trust score from prediction error and RSSI consistency. A peer is quarantined when at least two hearers exist and a strict majority of them score it below the trust threshold. Quarantined drones get no new targets and are never used as relays.
 
 ### Known limitations
 
 - Spoof detection relies on RSSI and degrades when drones are spread more than about 150 m apart.
-- A rejected replay is counted but never lowers the claimed sender's trust, so a replayer cannot frame an honest drone.
+- A replay that is rejected (old sequence number or timestamp) is only counted and never lowers the claimed sender's trust. A replay with a short delay (for example `inject_replay(pos, delay_s=0.05)`) can still hurt an honest drone: a receiver that missed the original packet accepts the copy as fresh, and because the RSSI comes from the attacker's position instead of the sender's, the RSSI check fails and the sender's trust drops.
 - Collision avoidance, A* and target scoring still use true positions.
 - The replay attacker currently hears without packet loss.
 
@@ -116,11 +115,11 @@ python -m scripts.comm_benchmark --seconds 120 --seed 100
 | tight | fixed_rate / cv | 140.0 | 4480 | 0.03 | 16.5 s | 0.000 / 0.000 |
 | tight | predictive / cv | 7.0 | 224 | 0.04 | 35.0 s | 0.000 / 0.000 |
 | tight | predictive / mlp | 7.3 | 234 | 2.74 | 33.9 s | 0.000 / 0.000 |
-| default | fixed_rate / cv | 140.0 | 4480 | 1.43 | 49.8 s | 0.000 / 0.000 |
-| default | predictive / cv | 18.0 | 575 | 3.70 | not detected in 115 s | 0.064 / 0.000 |
-| default | predictive / mlp | 13.9 | 445 | 4.55 | 29.7 s | 0.006 / 0.000 |
+| default | fixed_rate / cv | 140.0 | 4480 | 1.12 | 28.8 s | 0.000 / 0.000 |
+| default | predictive / cv | 7.6 | 242 | 3.09 | 48.2 s | 0.000 / 0.000 |
+| default | predictive / mlp | 7.6 | 243 | 4.44 | not detected in 115 s | 0.002 / 0.000 |
 
-Predictive sending cuts traffic by 8-20x while keeping the belief error under the 5 m send threshold. Spoof detection is slower with fewer packets and, on the spread-out default layout with the constant-velocity predictor, it did not trigger at all; that run also quarantined honest drones 6% of the time. The MLP did not beat constant velocity on belief error in either layout, so `CommNetwork` keeps constant velocity as its default predictor.
+Predictive sending cuts traffic by about 18-20x while keeping the belief error under the 5 m send threshold. Spoof detection is slower with fewer packets: 35 s instead of 16.5 s in the tight cluster, and 48 s instead of 29 s on the spread-out default layout. With the MLP predictor on the default layout the spoof was not caught within the run, and honest drones were quarantined 0.2% of the time in the clean run. The MLP did not beat constant velocity on belief error in either layout, so `CommNetwork` keeps constant velocity as its default predictor.
 
 The MLP weights (`app/comm/predictor_weights.npz`) come from `python -m scripts.train_predictor --runs 20 --seed 0` (about 10 s); `python -m scripts.export_predictor_c` writes them as an int8 C header to `build/predictor_weights.h`.
 

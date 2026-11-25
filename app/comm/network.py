@@ -7,9 +7,10 @@ Defaults (tuned against tests/test_comm_network.py, dt 0.05 s, cthr 200 m):
     err_tx 5.0 m, heartbeat 1 s, link_timeout 3 s, replay window 1000 ms,
     rssi_beta 0.1 (per-link EMA of RSSI z fed to trust),
     TrustTable alpha 0.05, init 0.8, trust_min 0.7, pred_err_ref 5.0, rssi_z_max 0.75.
-Per-packet z with rssi_z_max 1.5-2.0 missed the 30 s spoof bound on most seeds;
-the smoothed z with 0.75 detected a 2 m/s drag in 9-28 s over seeds 0-7 with
-no false quarantine in either mode.
+Per-packet z with rssi_z_max 1.5-2.0 missed the 30 s spoof bound on most seeds.
+With the smoothed z and 0.75, scripts/comm_benchmark.py (120 s, seed 100) detects a
+2 m/s drag in 16.5 s (fixed_rate) / 35 s (predictive) on the tight cluster and
+29 s / 48 s on the server layout, with no false quarantine for the cv predictor.
 """
 from collections import deque
 
