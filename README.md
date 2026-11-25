@@ -105,7 +105,24 @@ Each receiver keeps a per-peer trust score from prediction error and RSSI consis
 
 ### Benchmark
 
-Run `python scripts/comm_benchmark.py`
+```bash
+python -m scripts.comm_benchmark --seconds 120 --seed 100
+```
+
+`tight` is the compact drifting cluster used in `tests/test_comm_network.py`; `default` is the server's spawn layout flying real missions through `SimulationStep`. Each row is one clean run plus one run where drone 3 is GPS-spoofed at 5 s.
+
+| layout | mode / predictor | packets/s | bytes/s | belief error (m) | spoof time to detect | false quarantine (clean / spoof) |
+|---|---|---:|---:|---:|---|---|
+| tight | fixed_rate / cv | 140.0 | 4480 | 0.03 | 16.5 s | 0.000 / 0.000 |
+| tight | predictive / cv | 7.0 | 224 | 0.04 | 35.0 s | 0.000 / 0.000 |
+| tight | predictive / mlp | 7.3 | 234 | 2.74 | 33.9 s | 0.000 / 0.000 |
+| default | fixed_rate / cv | 140.0 | 4480 | 1.43 | 49.8 s | 0.000 / 0.000 |
+| default | predictive / cv | 18.0 | 575 | 3.70 | not detected in 115 s | 0.064 / 0.000 |
+| default | predictive / mlp | 13.9 | 445 | 4.55 | 29.7 s | 0.006 / 0.000 |
+
+Predictive sending cuts traffic by 8-20x while keeping the belief error under the 5 m send threshold. Spoof detection is slower with fewer packets and, on the spread-out default layout with the constant-velocity predictor, it did not trigger at all; that run also quarantined honest drones 6% of the time. The MLP did not beat constant velocity on belief error in either layout, so `CommNetwork` keeps constant velocity as its default predictor.
+
+The MLP weights (`app/comm/predictor_weights.npz`) come from `python -m scripts.train_predictor --runs 20 --seed 0` (about 10 s); `python -m scripts.export_predictor_c` writes them as an int8 C header to `build/predictor_weights.h`.
 
 ## WebSocket Protocol
 
