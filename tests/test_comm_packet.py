@@ -1,4 +1,6 @@
+import hmac
 from dataclasses import replace
+from hashlib import sha256
 
 import pytest
 
@@ -37,9 +39,8 @@ def test_bad_length():
 
 
 def test_bad_version():
-    raw = bytearray(encode(P, KEY))
-    raw[0] = 2
-    assert decode(bytes(raw), KEY) is None
+    body = bytes([2]) + encode(P, KEY)[1:24]  # re-signed so only the version check can reject it
+    assert decode(body + hmac.new(KEY, body, sha256).digest()[:8], KEY) is None
 
 
 def test_clamp():
