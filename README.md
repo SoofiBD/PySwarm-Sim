@@ -100,6 +100,7 @@ Each receiver keeps a per-peer trust score from prediction error and RSSI consis
 - Spoof detection relies on RSSI and degrades when drones are spread more than about 150 m apart.
 - A replay that is rejected (old sequence number or timestamp) is only counted and never lowers the claimed sender's trust. A replay with a short delay (for example `inject_replay(pos, delay_s=0.05)`) can still hurt an honest drone: a receiver that missed the original packet accepts the copy as fresh, and because the RSSI comes from the attacker's position instead of the sender's, the RSSI check fails and the sender's trust drops.
 - Collision avoidance, A* and target scoring still use true positions.
+- With a comm mode on, relay drones are reassigned more often and can pass each other closer than the 5 m safety distance (down to about 2 m in a 120 s run on the default layout). Avoidance only adds a small velocity nudge; a real airframe needs onboard sensing for this. `ideal` mode keeps at least 8 m.
 - The replay attacker currently hears without packet loss.
 
 ### Benchmark
@@ -115,11 +116,11 @@ python -m scripts.comm_benchmark --seconds 120 --seed 100
 | tight | fixed_rate / cv | 140.0 | 4480 | 0.03 | 16.5 s | 0.000 / 0.000 |
 | tight | predictive / cv | 7.0 | 224 | 0.04 | 35.0 s | 0.000 / 0.000 |
 | tight | predictive / mlp | 7.3 | 234 | 2.74 | 33.9 s | 0.000 / 0.000 |
-| default | fixed_rate / cv | 140.0 | 4480 | 1.12 | 28.8 s | 0.000 / 0.000 |
-| default | predictive / cv | 7.6 | 242 | 3.09 | 48.2 s | 0.000 / 0.000 |
-| default | predictive / mlp | 7.6 | 243 | 4.44 | not detected in 115 s | 0.002 / 0.000 |
+| default | fixed_rate / cv | 140.0 | 4480 | 0.91 | 33.1 s | 0.000 / 0.000 |
+| default | predictive / cv | 7.7 | 246 | 3.06 | not detected in 115 s | 0.000 / 0.000 |
+| default | predictive / mlp | 7.7 | 245 | 4.43 | not detected in 115 s | 0.000 / 0.000 |
 
-Predictive sending cuts traffic by about 18-20x while keeping the belief error under the 5 m send threshold. Spoof detection is slower with fewer packets: 35 s instead of 16.5 s in the tight cluster, and 48 s instead of 29 s on the spread-out default layout. With the MLP predictor on the default layout the spoof was not caught within the run, and honest drones were quarantined 0.2% of the time in the clean run. The MLP did not beat constant velocity on belief error in either layout, so `CommNetwork` keeps constant velocity as its default predictor.
+Predictive sending cuts traffic by about 18-20x while keeping the belief error under the 5 m send threshold. Spoof detection is slower with fewer packets: 35 s instead of 16.5 s in the tight cluster. On the spread-out default layout only `fixed_rate` caught the spoof (33 s); with predictive sending it was not caught within the run, and the result moves a lot with small changes to the scenario, so treat RSSI-based detection on spread swarms as unreliable. No honest drone was quarantined in any run. The MLP did not beat constant velocity on belief error in either layout, so `CommNetwork` keeps constant velocity as its default predictor.
 
 The MLP weights (`app/comm/predictor_weights.npz`) come from `python -m scripts.train_predictor --runs 20 --seed 0` (about 10 s); `python -m scripts.export_predictor_c` writes them as an int8 C header to `build/predictor_weights.h`.
 
@@ -160,7 +161,7 @@ pip install pytest pytest-asyncio
 pytest tests/ -v
 ```
 
-Expected: 51 tests, all passing.
+Expected: 115 tests, all passing.
 
 ## Deployment (VPS)
 
@@ -193,5 +194,5 @@ PythonDrone-master/
 ├── Dockerfile.backend          # Multi-stage Python build
 ├── docker-compose.yml          # Orchestration
 ├── .env.example                # Environment variable reference
-└── tests/                      # pytest test suite (51 tests)
+└── tests/                      # pytest test suite (115 tests)
 ```

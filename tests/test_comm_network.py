@@ -141,3 +141,15 @@ def test_turning_drone_sends_before_heartbeat():
     # first send at t=dt, then at least one error-triggered send before the 1 s heartbeat
     assert len(sends) >= 2
     assert sends[1] < net.heartbeat_s
+
+
+def test_broadcast_velocity_is_measured_motion():
+    # A drone holding position reports zero velocity even if its physics state carries an impulse,
+    # as a real GPS would; the internal velocity field is not what the radio sends.
+    uavs, _, ground = _swarm(hover=True)
+    uavs[0].velocity = Vector(30.0, 0.0, 0.0)
+    net = _net("fixed_rate")
+    for _ in range(3):
+        net.tick(uavs, ground)
+    _, _, vel = net.sent[1][-1]
+    assert np.allclose(vel, 0.0, atol=0.01)

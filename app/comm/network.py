@@ -9,8 +9,9 @@ Defaults (tuned against tests/test_comm_network.py, dt 0.05 s, cthr 200 m):
     TrustTable alpha 0.05, init 0.8, trust_min 0.7, pred_err_ref 5.0, rssi_z_max 0.75.
 Per-packet z with rssi_z_max 1.5-2.0 missed the 30 s spoof bound on most seeds.
 With the smoothed z and 0.75, scripts/comm_benchmark.py (120 s, seed 100) detects a
-2 m/s drag in 16.5 s (fixed_rate) / 35 s (predictive) on the tight cluster and
-29 s / 48 s on the server layout, with no false quarantine for the cv predictor.
+2 m/s drag in 16.5 s (fixed_rate) / 35 s (predictive) on the tight cluster. On the
+server layout fixed_rate detects it in 33 s; predictive does not within 115 s.
+No false quarantine in any benchmark run.
 """
 from collections import deque
 
@@ -63,6 +64,7 @@ class CommNetwork:
         self.seq: dict[int, int] = {}
         self.sent: dict[int, deque] = {}          # node -> own sent (t, pos, vel)
         self.last_sent: dict[int, float] = {}
+        self._prev_pos: dict[int, np.ndarray] = {}
         self.history: dict[tuple[int, int], deque] = {}  # (rx, peer) -> received (t, pos, vel)
         self.last_seq: dict[tuple[int, int], int] = {}
         self.last_heard: dict[tuple[int, int], float] = {}
@@ -93,8 +95,15 @@ class CommNetwork:
         self.replay_delay_s = delay_s
 
     def _nodes(self, uavs, ground) -> list[tuple[int, np.ndarray, np.ndarray, str]]:
-        nodes = [(self.node_id(u, i), u.pos._data.copy(), u.velocity._data.copy(), u.state)
-                 for i, u in enumerate(uavs)]
+        # Broadcast velocity is measured motion (what a GPS reports), not the physics state,
+        # which can carry avoidance impulses on a drone that is holding position.
+        nodes = []
+        for i, u in enumerate(uavs):
+            nid, pos = self.node_id(u, i), u.pos._data.copy()
+            prev = self._prev_pos.get(nid)
+            vel = (pos - prev) / self.dt if prev is not None else u.velocity._data.copy()
+            self._prev_pos[nid] = pos
+            nodes.append((nid, pos, vel, u.state))
         if ground is not None:
             nodes.append((GROUND_ID, ground.pos._data.copy(), np.zeros(3), "Free"))
         return nodes
