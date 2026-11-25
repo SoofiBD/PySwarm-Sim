@@ -136,10 +136,8 @@ class CommNetwork:
         last = self.last_seq.get(link)
         fresh_seq = last is None or _seq_newer(pkt.seq, last)
         if not fresh_seq or abs(pkt.t_ms - self.now_ms) > self.replay_window_ms:
+            # Count only: an outside attacker can replay anyone's packet, so never blame the sender.
             self.replays_rejected += 1
-            # A stale seq is the attacker's doing; only a fresh seq with a bad clock is the peer's.
-            if fresh_seq:
-                self.trust.penalize(rx, peer)
             return
         self.last_seq[link] = pkt.seq
         t_pkt, pos, vel = pkt.t_ms / 1000.0, np.array(pkt.pos), np.array(pkt.vel)

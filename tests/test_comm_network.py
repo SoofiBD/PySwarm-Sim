@@ -109,3 +109,16 @@ def test_bad_mode():
 def test_heartbeat_invariant():
     with pytest.raises(ValueError):
         _net("predictive", heartbeat_s=3, link_timeout_s=3)
+
+
+def test_replay_out_of_sender_range_does_not_penalize():
+    # Drones 1 and 3 are 300 m apart (> cthr); the attacker between them relays stale packets.
+    uavs = [UAV(pos=Vector(x, 0.0, 20.0), cthr=CTHR) for x in (0.0, 150.0, 300.0)]
+    for i, u in enumerate(uavs):
+        u.uav_no = i + 1
+    net = _net("fixed_rate")
+    net.inject_replay((150.0, 10.0, 20.0))
+    _run(net, uavs, [np.zeros(3)] * 3, None, 20)
+    assert net.metrics["replays_rejected"] > 0
+    for rx, peer in ((1, 3), (3, 1)):
+        assert net.trust.get(rx, peer) >= net.trust.trust_min
