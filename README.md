@@ -124,6 +124,16 @@ Predictive sending cuts traffic by about 18-20x while keeping the belief error u
 
 The MLP weights (`app/comm/predictor_weights.npz`) come from `python -m scripts.train_predictor --runs 20 --seed 0` (about 10 s); `python -m scripts.export_predictor_c` writes them as an int8 C header to `build/predictor_weights.h`.
 
+### Roadmap
+
+The comm layer works, but two things hold it back: neighbours predict each other without knowing where anyone is heading, and RSSI is too noisy to verify positions once the swarm spreads out. The next steps, in order:
+
+1. **Shared intent.** Add the current waypoint to the packet so every drone can run the same small motion model for its neighbours. Retrain the MLP on the residual that model misses (wind, battery sag, manoeuvres) instead of on blind constant-velocity error. Goal: fewer packets and a predictor that actually beats the baseline.
+2. **Learned trust.** Replace the hand-tuned trust thresholds with a small classifier (a few hundred parameters, int8 on the ESP32) trained in simulation on spoofing, sensor-fault and replay scenarios. Inputs: prediction residual, RSSI consistency, and whether several witnesses of the same peer agree.
+3. **FTM ranging.** Model Wi-Fi Fine Timing Measurement (802.11mc, supported by the ESP32-S3) as a 1-2 m range source next to RSSI, and check a peer's claimed position against ranges from several witnesses. This should make spoof detection work on spread-out swarms.
+4. **Risk-aware bandwidth.** Scale the send threshold with collision risk: drones close to each other report more often, distant ones less. This also targets the close relay passes listed above.
+5. **Hardware in the loop.** Run 2-3 ESP32-S3 boards with ESP-NOW against the simulator: the sim feeds each board its position, the boards exchange real packets over the air, and the sim reads back their beliefs and trust scores.
+
 ## WebSocket Protocol
 
 **Endpoint:** `wss://YOUR_DOMAIN/ws/telemetry`
