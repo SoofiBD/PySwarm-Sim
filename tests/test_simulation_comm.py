@@ -100,3 +100,20 @@ def test_predictive_on_server_layout_has_no_false_quarantine():
         if k < 20:
             assert not any(u.getState() == "Slave" for u in uavs)
     assert step.metrics["comm"]["false_quarantine_rate"] == 0.0
+
+
+def test_ideal_mode_keeps_safe_separation_on_server_layout():
+    # Holding relays keep their avoidance impulses and slaves stand off from their leader.
+    # TODO: comm modes still allow close passes between fast-moving relays (see README).
+    from app.manage_drones import CollisionDetector
+    from server.main import _create_simulation
+    np.random.seed(0)
+    uavs, goals, ground = _create_simulation()
+    step = SimulationStep()
+    min_sep = np.inf
+    for _ in range(round(120 / step.dt)):
+        step.tick(uavs, goals, ground)
+        pos = np.array([u.pos._data for u in uavs])
+        d = np.linalg.norm(pos[:, None] - pos[None, :], axis=-1)
+        min_sep = min(min_sep, d[np.triu_indices(len(uavs), 1)].min())
+    assert min_sep >= CollisionDetector.MIN_SAFE_DISTANCE

@@ -8,7 +8,6 @@ desktop QThread engine (app/engine.py) and the async FastAPI runner
 
 from typing import List, Optional
 
-import numpy as np
 
 from app.comm.network import GROUND_ID, CommNetwork
 from app.comm.packet import load_swarm_key
@@ -69,7 +68,6 @@ class SimulationStep:
 
         self._step_count += 1
         self.metrics["steps"] = self._step_count
-        start_pos = [u.pos._data.copy() for u in uavs]
         quarantined = self.comm.quarantined_ids() if self.comm else set()
 
         # 1. Build adjacency / distance matrix
@@ -141,9 +139,10 @@ class SimulationStep:
                          pathfinder=self._pathfinder,
                          all_uav_positions=positions)
 
-        # Only flown drones integrate velocity; one that held position this tick is hovering.
-        for uav, p in zip(uavs, start_pos):
-            if np.array_equal(uav.pos._data, p):
+        # Idle drones never integrate velocity, so clear what they kept from their last flight.
+        # Holding slaves keep theirs: it carries the collision-avoidance impulse.
+        for uav in uavs:
+            if uav.getState() == "Free" and uav.getTarget() is None:
                 uav.velocity = Vector(0.0, 0.0, 0.0)
 
         if self.comm:

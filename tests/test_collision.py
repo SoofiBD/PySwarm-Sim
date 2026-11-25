@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import sys
 sys.path.insert(0, '.')
@@ -124,3 +125,14 @@ def test_relay_slave_flies_to_link_midpoint_not_leader():
         free.followLeader(dt=0.05)
     # midpoint of the broken link, within cthr of both ends — not on top of the leader
     assert abs(free.pos.x - 250) < 10
+
+
+def test_slave_without_relay_point_stands_off_from_leader():
+    leader = UAV(pos=Vector(0.0, 0.0, 50.0), state="Leader")
+    slave = UAV(pos=Vector(50.0, 0.0, 50.0), state="Slave")
+    slave.my_leader = leader
+    for _ in range(600):
+        slave.followLeader(dt=0.05)
+        d = float(np.linalg.norm(slave.pos._data - leader.pos._data))
+        assert d >= CollisionDetector.MIN_SAFE_DISTANCE
+    assert d < 15.0  # it still closes in on the leader
