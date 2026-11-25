@@ -184,10 +184,12 @@ class DroneManager:
             relay_uavs.append(slave)
 
     @staticmethod
-    def AssignRelay(uavs: List[UAV], adj: List[List[float]], ground: Optional[Ground] = None, cthr: float = 200) -> List[UAV]:
+    def AssignRelay(uavs: List[UAV], adj: List[List[float]], ground: Optional[Ground] = None, cthr: float = 200,
+                    components: Optional[List[List[int]]] = None) -> List[UAV]:
         """Idempotent relay assignment — avoids duplicate slave appends and oscillation."""
         relay_uavs: List[UAV] = []
-        components = MatrixOperation.find_conn_comp(adj, cthr)
+        if components is None:
+            components = MatrixOperation.find_conn_comp(adj, cthr)
         if len(components) <= 1:
             return relay_uavs
         if ground:
@@ -209,6 +211,7 @@ class DroneManager:
             seen_pairs.add(pair_key)
             uav1, uav2 = uavs[idx1], uavs[idx2]
             # Gap <= 2*cthr, so the midpoint is within cthr of both ends: a slave there bridges them
+            # TODO: relay midpoint uses true positions (central shortcut), not comm-layer beliefs.
             midpoint = Vector(*((uav1.pos._data + uav2.pos._data) / 2))
 
             if uav1.state == "Free" and uav2.state == "Free":
