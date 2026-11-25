@@ -56,3 +56,47 @@ def test_quarantined_uav_gets_no_target(monkeypatch):
         step.tick(uavs, goals, ground)
     assert uavs[2].getTarget() is None
     assert any(u.getTarget() is not None for u in uavs)
+
+
+def test_no_relay_storm_before_links_exist():
+    # Tick 1 has no links yet, so every node looks isolated; relays must wait for link_timeout.
+    from server.main import _create_simulation
+    uavs, goals, ground = _create_simulation()
+    step = SimulationStep(comm_mode="predictive")
+    for _ in range(round(step.comm.link_timeout_s / step.dt)):
+        step.tick(uavs, goals, ground)
+        assert not any(u.getState() == "Slave" for u in uavs)
+
+
+def test_quarantined_uav_not_used_as_relay(monkeypatch):
+    from app.manage_drones import DroneManager
+    step = SimulationStep(comm_mode="predictive")
+    step.comm.t = step.comm.link_timeout_s  # past warm-up
+    seen = []
+    monkeypatch.setattr(step.comm, "quarantined_ids", lambda: {3})
+    monkeypatch.setattr(step.comm, "components", lambda uavs, ground: [[0, 1], [2], [3, 4, 5]])
+    monkeypatch.setattr(DroneManager, "AssignRelay",
+                        lambda *a, components=None, **k: seen.append(components) or [])
+    uavs, goals, ground = _world()
+    step.tick(uavs, goals, ground)
+    assert seen == [[[0, 1], [3, 4, 5]]]  # index 2 is node 3
+
+
+def test_hovering_drone_has_zero_velocity():
+    # A drone that is not flown this tick (Free, no target) must not report stale velocity.
+    uavs, _, ground = _world()
+    uavs[0].velocity = Vector(30.0, 0.0, 0.0)
+    step = SimulationStep()
+    step.tick(uavs, [], ground)
+    assert np.allclose(uavs[0].velocity._data, 0.0)
+
+
+def test_predictive_on_server_layout_has_no_false_quarantine():
+    from server.main import _create_simulation
+    uavs, goals, ground = _create_simulation()
+    step = SimulationStep(comm_mode="predictive")
+    for k in range(round(60 / step.dt)):
+        step.tick(uavs, goals, ground)
+        if k < 20:
+            assert not any(u.getState() == "Slave" for u in uavs)
+    assert step.metrics["comm"]["false_quarantine_rate"] == 0.0

@@ -8,13 +8,16 @@ desktop QThread engine (app/engine.py) and the async FastAPI runner
 
 from typing import List, Optional
 
-from app.comm.network import CommNetwork
+import numpy as np
+
+from app.comm.network import GROUND_ID, CommNetwork
 from app.comm.packet import load_swarm_key
 from app.goal import Goal
 from app.ground import Ground
 from app.logger import log_simulation_event
 from app.manage_drones import CollisionDetector, DroneManager
 from app.myMath.matrixOperation import MatrixOperation
+from app.myMath.vector import Vector
 from app.pathfinding import AStarPathfinder
 from app.uav import UAV
 
@@ -66,6 +69,8 @@ class SimulationStep:
 
         self._step_count += 1
         self.metrics["steps"] = self._step_count
+        start_pos = [u.pos._data.copy() for u in uavs]
+        quarantined = self.comm.quarantined_ids() if self.comm else set()
 
         # 1. Build adjacency / distance matrix
         if ground:
@@ -88,7 +93,6 @@ class SimulationStep:
         #    and iterate free UAVs in order, assigning highest-value goal per UAV. O(D·G) total not O(D²·G)
         if any(g.state == "Free" for g in goals):
             uav_to_goal = MatrixOperation.UAVtoGoal_AdjMatrix(uavs, goals) if goals and uavs else None
-            quarantined = self.comm.quarantined_ids() if self.comm else set()
             free_uavs_list = [
                 u for i, u in enumerate(uavs)
                 if u.getState() == "Free"
@@ -103,14 +107,21 @@ class SimulationStep:
                     uav.setTarget(target)
 
         # 5. Connectivity check & relay assignment
+        warming_up = False
         if self.comm:
             components = self.comm.components(uavs, ground)
+            # Quarantined nodes are left out of the graph, so they never bridge or get bridged.
+            ids = [CommNetwork.node_id(u, i) for i, u in enumerate(uavs)] + [GROUND_ID]
+            components = [c for c in ([i for i in comp if ids[i] not in quarantined]
+                                      for comp in components) if c]
+            # No links exist until peers have had time to hear each other; every node would look cut off.
+            warming_up = self.comm.t < self.comm.link_timeout_s
         else:
             components = MatrixOperation.find_conn_comp(adj, self.cthr)
         if self._step_count % 10 == 0:
             log_simulation_event("CONNECTIVITY", f"{len(components)} component(s)")
 
-        if len(components) != 1:
+        if len(components) > 1 and not warming_up:
             DroneManager.AssignRelay(uavs, adj, ground, self.cthr,
                                      components=components if self.comm else None)
             for uav in uavs:
@@ -129,6 +140,11 @@ class SimulationStep:
                 uav.move(target, dt=self.dt,
                          pathfinder=self._pathfinder,
                          all_uav_positions=positions)
+
+        # Only flown drones integrate velocity; one that held position this tick is hovering.
+        for uav, p in zip(uavs, start_pos):
+            if np.array_equal(uav.pos._data, p):
+                uav.velocity = Vector(0.0, 0.0, 0.0)
 
         if self.comm:
             self.comm.tick(uavs, ground)
