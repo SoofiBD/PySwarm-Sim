@@ -67,9 +67,11 @@ const ICONS = {
     },
 };
 
-function droneIcon() {
+function droneIcon(d) {
+    // trust fields are absent in ideal mode: keep the default icon
+    const flagged = d && (d.quarantined ? "red" : d.suspect ? "orange" : null);
     return {
-        url: ICONS.drone.url,
+        url: flagged ? `https://maps.google.com/mapfiles/ms/icons/${flagged}-dot.png` : ICONS.drone.url,
         scaledSize: ICONS.drone.scaledSize(),
         anchor:     ICONS.drone.anchor(),
     };
@@ -129,14 +131,14 @@ function _processDrones(drones, now) {
             const marker = new google.maps.Marker({
                 position: latLng,
                 map:      gmap,
-                icon:     droneIcon(),
+                icon:     droneIcon(d),
                 title:    `UAV ${d.id}`,
                 zIndex:   10,
             });
             // Info window with live telemetry
             const infoWin = new google.maps.InfoWindow();
             marker.addListener("click", () => {
-                infoWin.setContent(_droneInfoHtml(d));
+                infoWin.setContent(_droneInfoHtml(droneMarkers[d.id].data));
                 infoWin.open(gmap, marker);
             });
             droneMarkers[d.id] = { marker, infoWin, prev: latLng, target: latLng, ts: now, data: d };
@@ -147,6 +149,7 @@ function _processDrones(drones, now) {
             entry.target = latLng;
             entry.ts     = now;
             entry.data   = d;
+            entry.marker.setIcon(droneIcon(d));
         }
     }
 
@@ -252,7 +255,8 @@ function _droneInfoHtml(d) {
         State : ${d.state}<br>
         Alt   : ${d.alt} m<br>
         Speed : ${d.speed} m/s<br>
-        Vel   : (${d.vx}, ${d.vy}, ${d.vz})
+        Vel   : (${d.vx}, ${d.vy}, ${d.vz})${d.trust === undefined ? "" : `<br>
+        Trust : ${d.trust}${d.quarantined ? " (quarantined)" : d.suspect ? " (suspect)" : ""}`}
     </div>`;
 }
 

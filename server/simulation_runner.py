@@ -30,6 +30,7 @@ class SimulationRunner:
         broadcast_fn: Callable[[List[UAV], List[Goal]], Awaitable[None]],
         dt: float = 0.05,
         cthr: float = 200.0,
+        comm_mode: str = "ideal",
     ) -> None:
         self.uavs = uavs
         self.goals = goals
@@ -37,8 +38,13 @@ class SimulationRunner:
         self.broadcast_fn = broadcast_fn
         self.dt = dt
         self.cthr = cthr
+        self.comm_mode = comm_mode
         self.running = False
-        self._sim_step = SimulationStep(cthr=cthr, dt=dt)
+        self._sim_step = SimulationStep(cthr=cthr, dt=dt, comm_mode=comm_mode)
+
+    @property
+    def comm(self):
+        return self._sim_step.comm
 
     @property
     def metrics(self) -> dict:

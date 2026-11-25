@@ -72,7 +72,7 @@ def decode(raw: bytes, key: bytes) -> Packet | None:
 def load_swarm_key() -> bytes:
     global _warned
     hex_key = os.environ.get("SWARM_KEY")
-    if hex_key is None:
+    if not hex_key:  # unset or empty (compose passes an empty string)
         if not _warned:
             log_warning("comm", "SWARM_KEY not set; using insecure development key")
             _warned = True

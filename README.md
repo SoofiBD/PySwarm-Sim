@@ -53,6 +53,8 @@ Open `http://localhost:8000`.
 | `N_TARGETS` | No | `8` | Number of targets at startup |
 | `SIM_DT` | No | `0.05` | Simulation timestep (seconds) |
 | `CTHR` | No | `200.0` | Communication range threshold (metres) |
+| `SWARM_KEY` | No | dev key | Hex HMAC key for drone packets. If unset or empty a built-in development key is used and a warning is logged |
+| `COMM_MODE` | No | `ideal` | Startup comm mode: `ideal`, `fixed_rate` or `predictive`. An invalid value falls back to `ideal`. `POST /api/config` overrides it on restart |
 
 ## REST API
 
@@ -62,6 +64,48 @@ Open `http://localhost:8000`.
 | `GET` | `/api/metrics` | Step count, collisions resolved, targets visited |
 | `POST` | `/api/control` | `{"action": "start" \| "stop" \| "reset"}` |
 | `POST` | `/api/config` | `{"n_drones": N, "n_targets": M}` — reconfigures and restarts |
+| `POST` | `/api/config` | also accepts `"comm_mode": "ideal" \| "fixed_rate" \| "predictive"` (default `ideal`) |
+| `POST` | `/api/fault` | `{"kind": "gps_spoof" \| "replay", "drone_id": N \| null}` — injects a fault, needs `X-Admin-Token`. 409 in `ideal` mode, 404 for an unknown drone. Replay transmits from the swarm centroid |
+
+When comm mode is not `ideal`, `/api/metrics` also returns a `comm` object and each telemetry drone carries `trust`, `quarantined` and `suspect`. The map shows quarantined drones in red and suspect ones in orange.
+
+## Drone-to-drone communication
+
+In `fixed_rate` and `predictive` mode, drones no longer know each other's true positions. Each drone broadcasts a 32-byte packet, and neighbours, link state and the connectivity graph are built from what was actually received. `ideal` keeps the original behaviour (everything is omniscient).
+
+Packet layout (little-endian):
+
+| Offset | Size | Field |
+|--------|------|-------|
+| 0 | 1 | protocol version |
+| 1 | 1 | sender id (0 = ground, drones use `uav_no`) |
+| 2 | 2 | sequence number (wraps) |
+| 4 | 4 | timestamp, ms |
+| 8 | 6 | position x, y, z (int16, decimetres) |
+| 14 | 6 | velocity x, y, z (int16, cm/s) |
+| 20 | 1 | state (Free / Leader / Slave) |
+| 21 | 1 | flags (bit 0 = heartbeat) |
+| 22 | 2 | reserved |
+| 24 | 8 | HMAC-SHA256 over bytes 0-23, truncated to 64 bits |
+
+Modes:
+
+- `ideal`: no comm layer.
+- `fixed_rate`: every drone sends once per heartbeat (1 s).
+- `predictive`: a drone sends only when a small predictor (constant velocity or a tiny MLP) of its position, as the peers would estimate it, drifts more than 5 m from the real one, plus the heartbeat. A link is dropped after 3 s of silence.
+
+Each receiver keeps a per-peer trust score from prediction error and RSSI consistency. A peer is quarantined when at least two hearers exist and a strict majority of them score it below the trust threshold.
+
+### Known limitations
+
+- Spoof detection relies on RSSI and degrades when drones are spread more than about 150 m apart.
+- A rejected replay is counted but never lowers the claimed sender's trust, so a replayer cannot frame an honest drone.
+- Collision avoidance, A* and target scoring still use true positions.
+- The replay attacker currently hears without packet loss.
+
+### Benchmark
+
+Run `python scripts/comm_benchmark.py`
 
 ## WebSocket Protocol
 

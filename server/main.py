@@ -11,6 +11,7 @@ Entry point:
 
 import asyncio
 import json
+import logging
 import math
 import os
 import secrets
@@ -59,6 +60,11 @@ class ControlRequest(PydanticBase):
 class ConfigRequest(PydanticBase):
     n_drones: int = Field(default=6, ge=1, le=100)
     n_targets: int = Field(default=8, ge=1, le=200)
+    comm_mode: Literal["ideal", "fixed_rate", "predictive"] = "ideal"
+
+class FaultRequest(PydanticBase):
+    kind: Literal["gps_spoof", "replay"]
+    drone_id: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +103,17 @@ class ConnectionManager:
     @property
     def client_count(self) -> int:
         return len(self._active)
+
+
+_COMM_MODES = ("ideal", "fixed_rate", "predictive")
+
+
+def _env_comm_mode() -> str:
+    mode = os.getenv("COMM_MODE", "ideal")
+    if mode not in _COMM_MODES:
+        logging.getLogger("DroneSimulation").warning("invalid COMM_MODE %r, using ideal", mode)
+        return "ideal"
+    return mode
 
 
 manager = ConnectionManager()
@@ -149,7 +166,7 @@ def _create_simulation(
 def _make_broadcast_fn():
     async def _broadcast(uavs_: list, goals_: list) -> None:
         if manager.client_count > 0:
-            payload = _build_telemetry(uavs_, goals_)
+            payload = _build_telemetry(uavs_, goals_, runner.comm if runner else None)
             await manager.broadcast(payload)
     return _broadcast
 
@@ -157,9 +174,11 @@ def _make_broadcast_fn():
 # ---------------------------------------------------------------------------
 # Telemetry serialiser — converts simulation state → broadcast payload
 # ---------------------------------------------------------------------------
-def _build_telemetry(uavs: list[UAV], goals: list[Goal]) -> dict:
+def _build_telemetry(uavs: list[UAV], goals: list[Goal], comm=None) -> dict:
     drones = []
-    for uav in uavs:
+    quarantined = comm.quarantined_ids() if comm else set()
+    suspect = comm.suspect_ids() if comm else set()
+    for i, uav in enumerate(uavs):
         lat, lng = sim_to_geo(uav.pos.x, uav.pos.y)
         drones.append({
             "id":    uav.uav_no,
@@ -172,6 +191,11 @@ def _build_telemetry(uavs: list[UAV], goals: list[Goal]) -> dict:
             "vz":    round(uav.velocity.z, 3),
             "speed": round(uav.velocity.get_length(), 3),
         })
+        if comm:
+            nid = comm.node_id(uav, i)
+            drones[-1].update(trust=round(comm.mean_trust(nid), 3),
+                              quarantined=nid in quarantined,
+                              suspect=nid in suspect)
 
     targets = []
     for g in goals:
@@ -205,7 +229,8 @@ async def lifespan(app: FastAPI):
                                               n_targets=n_targets,
                                               cthr=cthr)
     runner = SimulationRunner(uavs, goals, ground,
-                              broadcast_fn=_make_broadcast_fn(), dt=dt, cthr=cthr)
+                              broadcast_fn=_make_broadcast_fn(), dt=dt, cthr=cthr,
+                              comm_mode=_env_comm_mode())
     _runner_task = asyncio.create_task(runner.run_loop(), name="simulation")
     yield
     await _stop_runner()
@@ -246,6 +271,7 @@ async def metrics() -> JSONResponse:
     if runner is None:
         return JSONResponse({"error": "simulation not running"}, status_code=503)
     return JSONResponse({
+        **({"comm": runner.metrics["comm"]} if "comm" in runner.metrics else {}),
         "steps": runner.metrics["steps"],
         "collisions_resolved": runner.metrics["collisions_resolved"],
         "targets_visited": runner.metrics["targets_visited"],
@@ -268,13 +294,17 @@ async def _stop_runner() -> None:
         _runner_task = None
 
 
-async def _restart_runner(n_drones: int = 6, n_targets: int = 8, cthr: float = 200.0, dt: float = 0.05) -> None:
+async def _restart_runner(n_drones: int = 6, n_targets: int = 8, cthr: float = 200.0, dt: float = 0.05,
+                          comm_mode: str | None = None) -> None:
     global runner, _runner_task
+    if comm_mode is None:
+        comm_mode = runner.comm_mode if runner else _env_comm_mode()
     await _stop_runner()
     cthr = _clamp(cthr, 10.0, 1000.0)
     dt = _clamp(dt, 0.01, 0.2)
     uavs, goals, ground = _create_simulation(n_drones=n_drones, n_targets=n_targets, cthr=cthr)
-    runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_make_broadcast_fn(), dt=dt, cthr=cthr)
+    runner = SimulationRunner(uavs, goals, ground, broadcast_fn=_make_broadcast_fn(), dt=dt, cthr=cthr,
+                              comm_mode=comm_mode)
     _runner_task = asyncio.create_task(runner.run_loop(), name="simulation")
 
 
@@ -300,10 +330,28 @@ async def configure(req: ConfigRequest) -> JSONResponse:
     cthr = _clamp(float(os.getenv("CTHR", "200.0")), 10.0, 1000.0)
     dt = _clamp(float(os.getenv("SIM_DT", "0.05")), 0.01, 0.2)
     async with _control_lock:
-        await _restart_runner(n_drones=req.n_drones, n_targets=req.n_targets, cthr=cthr, dt=dt)
+        await _restart_runner(n_drones=req.n_drones, n_targets=req.n_targets, cthr=cthr, dt=dt,
+                              comm_mode=req.comm_mode)
     return JSONResponse({"status": "reconfigured",
                          "n_drones": req.n_drones,
                          "n_targets": req.n_targets})
+
+
+@app.post("/api/fault", dependencies=[Depends(_require_admin)])
+async def fault(req: FaultRequest) -> JSONResponse:
+    async with _control_lock:
+        comm = runner.comm if runner else None
+        if comm is None:
+            return JSONResponse({"error": "comm mode is ideal"}, status_code=409)
+        ids = [comm.node_id(u, i) for i, u in enumerate(runner.uavs)]
+        if req.drone_id is not None and req.drone_id not in ids:
+            return JSONResponse({"error": "unknown drone_id"}, status_code=404)
+        if req.kind == "gps_spoof":
+            comm.inject_gps_spoof(req.drone_id if req.drone_id is not None else ids[0])
+        else:
+            n = len(runner.uavs)
+            comm.inject_replay(tuple(sum(u.pos._data[k] for u in runner.uavs) / n for k in range(3)))
+    return JSONResponse({"status": "injected"})
 
 
 @app.websocket("/ws/telemetry")
