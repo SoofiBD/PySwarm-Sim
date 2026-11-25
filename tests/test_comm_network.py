@@ -122,3 +122,22 @@ def test_replay_out_of_sender_range_does_not_penalize():
     assert net.metrics["replays_rejected"] > 0
     for rx, peer in ((1, 3), (3, 1)):
         assert net.trust.get(rx, peer) >= net.trust.trust_min
+
+
+def test_turning_drone_sends_before_heartbeat():
+    # One drone on a tight circle (r 10 m, 20 m/s, 40 m/s^2): straight-line guess is 5 m off after ~0.5 s.
+    u = UAV(pos=Vector(10.0, 0.0, 20.0), cthr=CTHR)
+    u.uav_no = 1
+    net = _net("predictive")
+    w, sends = 2.0, []
+    for k in range(1, round(0.9 / DT)):
+        a = w * k * DT
+        u.pos = Vector(10.0 * np.cos(a), 10.0 * np.sin(a), 20.0)
+        u.velocity = Vector(-20.0 * np.sin(a), 20.0 * np.cos(a), 0.0)
+        before = net.packets_sent
+        net.tick([u], None)
+        if net.packets_sent > before:
+            sends.append(net.t)
+    # first send at t=dt, then at least one error-triggered send before the 1 s heartbeat
+    assert len(sends) >= 2
+    assert sends[1] < net.heartbeat_s

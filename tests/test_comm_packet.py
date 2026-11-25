@@ -4,7 +4,7 @@ from hashlib import sha256
 
 import pytest
 
-from app.comm.packet import FLAG_HEARTBEAT, Packet, decode, encode, load_swarm_key
+from app.comm.packet import DEV_KEY, FLAG_HEARTBEAT, Packet, decode, encode, load_swarm_key
 
 KEY = bytes(range(32))
 P = Packet(sender_id=3, seq=65535, t_ms=123456, pos=(12.3, -4.5, 50.0), vel=(1.25, 0.0, -0.5), state="Leader", flags=FLAG_HEARTBEAT)
@@ -52,3 +52,11 @@ def test_key_env(monkeypatch):
     assert load_swarm_key() == b"\x00" * 32
     monkeypatch.setenv("SWARM_KEY", "zz")
     pytest.raises(ValueError, load_swarm_key)
+
+
+def test_short_key_rejected(monkeypatch):
+    monkeypatch.setenv("SWARM_KEY", "00")
+    with pytest.raises(ValueError, match="16 bytes"):
+        load_swarm_key()
+    monkeypatch.setenv("SWARM_KEY", "")
+    assert load_swarm_key() == DEV_KEY

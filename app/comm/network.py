@@ -223,6 +223,7 @@ class CommNetwork:
             self._belief_sum += float(np.linalg.norm(self.predictor.predict(hist, self.t)[0] - true_pos[peer]))
             self._belief_n += 1
         q = self.quarantined_ids()
+        # TODO: time_to_detect is the first quarantine, even if the node later drops out of quarantine.
         for nid in self.spoofs:
             if nid in q and nid not in self.detected:
                 self.detected[nid] = self.t - self.spoofs[nid][0]

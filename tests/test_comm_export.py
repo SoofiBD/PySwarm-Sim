@@ -47,3 +47,16 @@ def test_header_has_dims(tmp_path):
     assert "#define PREDICTOR_N_IN 22" in text
     assert "int8_t predictor_w1[22 * 16]" in text
     assert "float predictor_w1_scale" in text
+
+
+def test_scale_literals_are_valid_c_floats(tmp_path):
+    # An all-zero tensor gets scale 1.0, which must not be printed as "1f".
+    src = tmp_path / "w.npz"
+    f = TinyMLPPredictor.load(DEFAULT_WEIGHTS)
+    np.savez(src, w1=f.w1, b1=np.zeros_like(f.b1), w2=f.w2, b2=f.b2)
+    out = tmp_path / "predictor_weights.h"
+    export(src, out)
+    scales = [ln for ln in out.read_text().splitlines() if "_scale = " in ln]
+    assert len(scales) == 4
+    assert all("." in ln.split("= ")[1] or "e" in ln.split("= ")[1] for ln in scales), scales
+    assert "predictor_b1_scale = 1.0f;" in out.read_text()

@@ -12,6 +12,7 @@ PROTOCOL_VERSION = 1
 STATE_CODES = {"Free": 0, "Leader": 1, "Slave": 2}
 FLAG_HEARTBEAT = 0x01
 DEV_KEY = b"dev-swarm-key-not-for-flight!!!!"
+MIN_KEY_BYTES = 16
 
 _BODY = struct.Struct("<BBHI3h3hBBH")  # ver, sender, seq, t_ms, pos dm, vel cm/s, state, flags, reserved
 _STATE_NAMES = {v: k for k, v in STATE_CODES.items()}
@@ -77,4 +78,7 @@ def load_swarm_key() -> bytes:
             log_warning("comm", "SWARM_KEY not set; using insecure development key")
             _warned = True
         return DEV_KEY
-    return bytes.fromhex(hex_key)
+    key = bytes.fromhex(hex_key)
+    if len(key) < MIN_KEY_BYTES:
+        raise ValueError(f"SWARM_KEY must be at least {MIN_KEY_BYTES} bytes ({2 * MIN_KEY_BYTES} hex chars), got {len(key)}")
+    return key

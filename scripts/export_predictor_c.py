@@ -47,7 +47,7 @@ def export(weights: Path, out: Path) -> None:
         for i in range(0, len(flat), 16):
             lines.append("    " + ", ".join(str(v) for v in flat[i:i + 16]) + ",")
         lines.append("};")
-        lines.append(f"static const float predictor_{name}_scale = {scale:.9g}f;")
+        lines.append(f"static const float predictor_{name}_scale = {scale!r}f;")
         lines.append("")
     lines.append("#endif /* PREDICTOR_WEIGHTS_H */")
     out.parent.mkdir(parents=True, exist_ok=True)
