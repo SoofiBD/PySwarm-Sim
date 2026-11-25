@@ -14,6 +14,8 @@ services:
       MAPS_API_KEY:  "${MAPS_API_KEY}"
       # Required: protects POST /api/control and /api/config
       ADMIN_TOKEN:   "${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}"
+      SWARM_KEY:     "${SWARM_KEY:-}"
+      COMM_MODE:     "${COMM_MODE:-ideal}"
       N_DRONES:      "${N_DRONES:-6}"
       N_TARGETS:     "${N_TARGETS:-8}"
       SIM_DT:        "${SIM_DT:-0.05}"

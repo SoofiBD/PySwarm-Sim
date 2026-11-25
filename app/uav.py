@@ -18,7 +18,7 @@ Physical parameters (typical 350-class racing quadcopter):
 """
 
 from collections import deque
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, ClassVar, List, Optional
 
 import numpy as np
 from pydantic import Field, PrivateAttr
@@ -49,6 +49,7 @@ class UAV(Node):
     velocity: Vector = Field(default_factory=lambda: Vector(0.0, 0.0, 0.0))
     mass: float = 1.5       # kg
     max_thrust: float = 30.0  # N
+    FOLLOW_STANDOFF: ClassVar[float] = 10.0  # m behind the leader when no relay point is set
     _waypoints: deque = PrivateAttr(default_factory=deque)
     _wp_goal: Optional[Goal] = PrivateAttr(default=None)  # goal the waypoints lead to
 
@@ -93,11 +94,19 @@ class UAV(Node):
         self.pos = Vector(*pos_new_arr)
         self.velocity = Vector(*vel_new_arr)
 
+    def _standoff(self, leader_pos: Vector) -> Vector:
+        # Aim short of the leader: flying onto its exact position is a collision course.
+        offset = self.pos._data - leader_pos._data
+        dist = np.linalg.norm(offset)
+        if dist < 1e-9:
+            return leader_pos
+        return Vector(*(leader_pos._data + offset / dist * self.FOLLOW_STANDOFF))
+
     def followLeader(self, dt: float = 0.05) -> None:
         leader = self.getLeader()
         if leader is None or leader is self:
             return
-        desired = self.relay_point or leader.pos
+        desired = self.relay_point or self._standoff(leader.pos)
         if VectorOperations.isAlmostEqual(self.pos, desired, float(self.speed)):
             return
         pos_new_arr, vel_new_arr = DronePhysics.step(
