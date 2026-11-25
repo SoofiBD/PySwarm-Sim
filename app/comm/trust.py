@@ -4,10 +4,10 @@ class TrustTable:
     def __init__(
         self,
         alpha: float = 0.05,
-        init: float = 0.5,
+        init: float = 0.8,
         trust_min: float = 0.7,
         pred_err_ref: float = 5.0,
-        rssi_z_max: float = 2.0,
+        rssi_z_max: float = 0.75,
     ) -> None:
         self.alpha = alpha
         self.init = init

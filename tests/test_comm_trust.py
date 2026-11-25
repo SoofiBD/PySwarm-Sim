@@ -27,9 +27,9 @@ def test_big_residual_is_bad():
 
 def test_unseen_is_init_and_penalize():
     t = TrustTable()
-    assert t.get(1, 2) == 0.5
+    assert t.get(1, 2) == 0.8
     t.penalize(1, 2)
-    assert abs(t.get(1, 2) - 0.3) < 1e-9
+    assert abs(t.get(1, 2) - 0.6) < 1e-9
     t.penalize(1, 2, 1.0)
     assert t.get(1, 2) == 0.0
 
@@ -63,5 +63,5 @@ def test_half_is_not_majority():
 def test_mean_trust():
     t = TrustTable()
     assert t.mean_trust(9) == 1.0
-    t.penalize(1, 9, 0.5)
+    t.penalize(1, 9, 1.0)
     assert t.mean_trust(9) == 0.0
